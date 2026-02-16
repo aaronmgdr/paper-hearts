@@ -8,6 +8,8 @@
 **Encryption Model:** End-to-End Encryption (E2EE)
 **Platform:** Progressive Web App (PWA)
 **V1 Targets:** Android (Chrome) & iOS (Safari)
+**Client Stack:** SolidJS + Vite + TypeScript
+**Server Stack:** Bun + PostgreSQL
 
 ---
 
@@ -147,7 +149,7 @@ The encrypted payload, once decrypted, contains:
 | Version | Focus | Features |
 | --- | --- | --- |
 | **V1 (MVP)** | **Foundation** | E2EE (libsodium), Single-Scan Handshake, OPFS storage, 4 AM Pivot, Blind Relay (Bun + Postgres), WebRTC recovery, PWA with mandatory install. |
-| **V2** | **Engagement** | Push notifications (iOS + Android), on-device LLM sentiment analysis (WebGPU, local only). |
+| **V2** | **Engagement** | Push notifications (iOS + Android), on-device LLM sentiment analysis (WebGPU, local only), tablet-optimized writing experience. |
 | **V3** | **Experience** | Calendar view, entry editing. |
 
 ---
