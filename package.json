@@ -1,0 +1,12 @@
+{
+  "name": "paper-hearts",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev:client": "cd client && bun run dev",
+    "dev:server": "bun run server/index.ts",
+    "build": "cd client && bun run build",
+    "start": "bun run server/migrate.ts && bun run server/index.ts",
+    "migrate": "bun run server/migrate.ts"
+  }
+}

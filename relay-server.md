@@ -309,3 +309,103 @@ Both devices now have partner's public key
 | `bun` | Runtime & HTTP server (built-in `Bun.serve`) |
 | `postgres` (porsager/postgres) | Postgres client for Bun |
 | `libsodium-wrappers` | Ed25519 signature verification |
+
+---
+
+## 9. Deployment (Railway)
+
+### 9.1 Architecture
+
+Single Railway project with two services:
+
+- **App Service** — Bun process that serves both the API (`/api/*`) and the static SolidJS build (`/*`) from the same `Bun.serve` instance.
+- **Postgres** — Railway-managed PostgreSQL database, provisioned via the dashboard.
+
+No separate CDN, no nginx, no reverse proxy. One process, one port.
+
+### 9.2 Project Structure
+
+```
+paper-hearts/
+├── client/              # SolidJS + Vite app
+│   ├── src/
+│   ├── index.html
+│   └── vite.config.ts
+├── server/              # Bun relay server
+│   ├── src/
+│   ├── migrations/      # SQL migration files
+│   └── index.ts         # Entry point (Bun.serve)
+├── Dockerfile
+└── package.json
+```
+
+### 9.3 Routing in `Bun.serve`
+
+```
+Request
+  │
+  ├─ /api/pairs/*     → Onboarding handlers
+  ├─ /api/entries/*    → Entry handlers
+  └─ /*                → Static file from client/dist/
+                         (fallback to index.html for SPA routing)
+```
+
+### 9.4 Railway Configuration
+
+**Environment variables:**
+
+| Variable | Source |
+| --- | --- |
+| `DATABASE_URL` | Auto-injected by Railway when Postgres is linked |
+| `PORT` | Auto-injected by Railway (default 3000) |
+
+No other config needed. No secrets to manage — the server doesn't hold any encryption keys.
+
+**Build command:**
+```bash
+bun install && cd client && bun run build && cd ..
+```
+
+**Start command:**
+```bash
+bun run server/index.ts
+```
+
+### 9.5 Dockerfile
+
+```dockerfile
+FROM oven/bun:1
+
+WORKDIR /app
+
+COPY package.json bun.lock ./
+COPY client/package.json client/
+COPY server/package.json server/
+RUN bun install
+
+COPY . .
+RUN cd client && bun run build
+
+EXPOSE 3000
+CMD ["bun", "run", "server/index.ts"]
+```
+
+### 9.6 Database Migrations
+
+Migrations run on deploy via a script before the server starts:
+
+```bash
+bun run server/migrate.ts && bun run server/index.ts
+```
+
+Migration files are plain `.sql` files in `server/migrations/`, applied in order. A `schema_migrations` table tracks which have run.
+
+### 9.7 SSL / Domain
+
+- Railway provides automatic HTTPS via `*.up.railway.app`.
+- Custom domain (e.g. `paperhearts.app`) can be added via Railway dashboard with automatic SSL provisioning.
+- The PWA manifest and service worker scope must match the final domain.
+
+### 9.8 Scaling
+
+Not a concern for V1. Two users, ~2 requests/day each. Railway's free/hobby tier is more than sufficient. If the app is ever opened to multiple couples, Railway supports horizontal scaling via replicas — the server is stateless (all state lives in Postgres).

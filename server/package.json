@@ -1,0 +1,15 @@
+{
+  "name": "paper-hearts-server",
+  "private": true,
+  "scripts": {
+    "test": "DATABASE_URL=postgres://localhost/paperhearts bun test --timeout 15000"
+  },
+  "dependencies": {
+    "libsodium-wrappers-sumo": "^0.8.2",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.9",
+    "@types/libsodium-wrappers-sumo": "^0.8.2"
+  }
+}
