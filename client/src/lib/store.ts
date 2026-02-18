@@ -1,10 +1,12 @@
 import { createSignal } from "solid-js";
-import * as crypto from "./crypto";
+import type { EncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getDayId } from "./dayid";
 import { enqueue } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
+
+const loadCrypto = () => import("./crypto");
 
 // ── Reactive state ──────────────────────────────────────────
 
@@ -17,9 +19,28 @@ const [sharedSecret, setSharedSecret] = createSignal<Uint8Array | null>(null);
 
 export { isReady, isPaired, publicKey, secretKey };
 
+// ── Helpers (moved from storage.ts to avoid its crypto dependency) ──
+
+function identityToEncryptedKey(identity: storage.StoredIdentity, crypto: Awaited<ReturnType<typeof loadCrypto>>): EncryptedKey {
+  return {
+    salt: crypto.fromBase64(identity.encryptedKey.salt),
+    nonce: crypto.fromBase64(identity.encryptedKey.nonce),
+    ciphertext: crypto.fromBase64(identity.encryptedKey.ciphertext),
+  };
+}
+
+function encryptedKeyToStorable(ek: EncryptedKey, crypto: Awaited<ReturnType<typeof loadCrypto>>) {
+  return {
+    salt: crypto.toBase64(ek.salt),
+    nonce: crypto.toBase64(ek.nonce),
+    ciphertext: crypto.toBase64(ek.ciphertext),
+  };
+}
+
 // ── Init ────────────────────────────────────────────────────
 
 export async function initialize(): Promise<void> {
+  const crypto = await loadCrypto();
   await crypto.init();
   const identity = await storage.loadIdentity();
   if (identity) {
@@ -39,7 +60,8 @@ export async function unlock(passphrase: string): Promise<boolean> {
   if (!identity) return false;
 
   try {
-    const encKey = storage.identityToEncryptedKey(identity);
+    const crypto = await loadCrypto();
+    const encKey = identityToEncryptedKey(identity, crypto);
     const sk = crypto.decryptSecretKey(encKey, passphrase);
     setSecretKey(sk);
     setPublicKey(crypto.fromBase64(identity.publicKey));
@@ -60,6 +82,7 @@ export async function unlock(passphrase: string): Promise<boolean> {
 // ── Onboarding ──────────────────────────────────────────────
 
 export async function createIdentity(passphrase: string): Promise<{ publicKeyB64: string }> {
+  const crypto = await loadCrypto();
   await crypto.init();
   const kp = crypto.generateKeyPair();
   const encKey = crypto.encryptSecretKey(kp.secretKey, passphrase);
@@ -67,7 +90,7 @@ export async function createIdentity(passphrase: string): Promise<{ publicKeyB64
 
   await storage.saveIdentity({
     publicKey: publicKeyB64,
-    encryptedKey: storage.encryptedKeyToStorable(encKey),
+    encryptedKey: encryptedKeyToStorable(encKey, crypto),
     pairId: null,
     partnerPublicKey: null,
   });
@@ -80,6 +103,7 @@ export async function createIdentity(passphrase: string): Promise<{ publicKeyB64
 export async function initiateHandshake(): Promise<{ relayToken: string; pairId: string }> {
   const pk = publicKey();
   if (!pk) throw new Error("No identity");
+  const crypto = await loadCrypto();
   const pkB64 = crypto.toBase64(pk);
   const { status, data } = await relay.initiatePair(pkB64);
   if (status !== 201) throw new Error(data.error || "Failed to initiate pair");
@@ -96,6 +120,7 @@ export async function initiateHandshake(): Promise<{ relayToken: string; pairId:
 export async function joinHandshake(relayToken: string): Promise<{ partnerPublicKeyB64: string }> {
   const pk = publicKey();
   if (!pk) throw new Error("No identity");
+  const crypto = await loadCrypto();
   const pkB64 = crypto.toBase64(pk);
   const { status, data } = await relay.joinPair(pkB64, relayToken);
   if (status !== 200) throw new Error(data.error || "Failed to join pair");
@@ -134,6 +159,7 @@ export async function pollForPartner(): Promise<string | null> {
 
 /** Called by initiator after follower joins — we need to fetch partner's key. */
 export async function completeInitiatorPairing(partnerPublicKeyB64: string): Promise<void> {
+  const crypto = await loadCrypto();
   const partnerPk = crypto.fromBase64(partnerPublicKeyB64);
   setPartnerPublicKey(partnerPk);
   setIsPaired(true);
@@ -170,6 +196,7 @@ export async function submitEntry(text: string): Promise<void> {
   const ss = sharedSecret();
   if (!ss) throw new Error("Not unlocked or not paired");
 
+  const crypto = await loadCrypto();
   const plaintext = JSON.stringify({
     text,
     format: "markdown",
@@ -195,6 +222,7 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
 
   const entries = data.entries || [];
   const idsToAck: string[] = [];
+  const crypto = await loadCrypto();
 
   for (const entry of entries) {
     try {

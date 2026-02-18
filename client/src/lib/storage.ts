@@ -1,5 +1,3 @@
-import { toBase64, fromBase64, type EncryptedKey } from "./crypto";
-
 // ── OPFS helpers ────────────────────────────────────────────
 
 async function getRoot(): Promise<FileSystemDirectoryHandle> {
@@ -51,22 +49,6 @@ export async function loadIdentity(): Promise<StoredIdentity | null> {
   const data = await readFile(dir, "identity.json");
   if (!data) return null;
   return JSON.parse(data);
-}
-
-export function identityToEncryptedKey(identity: StoredIdentity): EncryptedKey {
-  return {
-    salt: fromBase64(identity.encryptedKey.salt),
-    nonce: fromBase64(identity.encryptedKey.nonce),
-    ciphertext: fromBase64(identity.encryptedKey.ciphertext),
-  };
-}
-
-export function encryptedKeyToStorable(ek: EncryptedKey) {
-  return {
-    salt: toBase64(ek.salt),
-    nonce: toBase64(ek.nonce),
-    ciphertext: toBase64(ek.ciphertext),
-  };
 }
 
 // ── Entries (one file per dayId) ────────────────────────────

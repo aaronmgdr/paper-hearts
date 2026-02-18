@@ -1,6 +1,8 @@
-import { createSignal, Match, Switch, Show, onCleanup } from "solid-js";
+import { createSignal, Match, Switch, Show, onCleanup, lazy } from "solid-js";
+import type { QRSVGProps } from "solid-qr-code";
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { QRCodeSVG, type QRSVGProps } from "solid-qr-code";
+
+const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
 import { createIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
 import styles from "./Onboarding.module.css";

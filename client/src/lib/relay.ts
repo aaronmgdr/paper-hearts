@@ -1,6 +1,6 @@
-import { sign, toBase64 } from "./crypto";
-
 const BASE = "/api";
+
+const loadCrypto = () => import("./crypto");
 
 // ── Signing helper ──────────────────────────────────────────
 
@@ -11,6 +11,7 @@ export async function signedHeaders(
   publicKey: Uint8Array,
   secretKey: Uint8Array
 ): Promise<Record<string, string>> {
+  const { sign, toBase64 } = await loadCrypto();
   const timestamp = new Date().toISOString();
 
   const bodyHash = body
