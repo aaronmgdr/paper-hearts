@@ -103,3 +103,15 @@ export async function ackEntries(
   const res = await fetch(path, { method: "POST", headers, body });
   return { status: res.status, data: await res.json() };
 }
+
+export async function subscribePush(
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/push/subscribe`;
+  const body = JSON.stringify(subscription);
+  const headers = await signedHeaders("POST", path, body, publicKey, secretKey);
+  const res = await fetch(path, { method: "POST", headers, body });
+  return { status: res.status, data: await res.json() };
+}

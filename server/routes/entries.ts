@@ -1,5 +1,6 @@
 import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
+import { notifyPartner } from "../push";
 
 const MAX_BLOBS_PER_DAY = 2;
 
@@ -58,6 +59,12 @@ export async function createEntry(req: Request, path: string): Promise<Response>
   `;
 
   console.log(`[createEntry] OK id=${entry.id}`);
+
+  // Notify partner (fire-and-forget)
+  notifyPartner(auth.publicKey, auth.pairId).catch((e) =>
+    console.error("[createEntry] push error:", e)
+  );
+
   return Response.json({ id: entry.id, status: "stored" }, { status: 201 });
 }
 

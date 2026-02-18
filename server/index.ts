@@ -1,6 +1,7 @@
 import { join } from "path";
 import { initiate, join as joinPair, pairStatus } from "./routes/pairs";
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
+import { subscribePush } from "./routes/push";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const CLIENT_DIST = join(import.meta.dir, "../client/dist");
@@ -85,6 +86,11 @@ async function handleApi(req: Request, path: string): Promise<Response> {
   }
   if (path === "/api/entries/ack" && req.method === "POST") {
     return ackEntries(req, path);
+  }
+
+  // Push subscription
+  if (path === "/api/push/subscribe" && req.method === "POST") {
+    return subscribePush(req, path);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

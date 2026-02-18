@@ -14,7 +14,6 @@ const [isReady, setIsReady] = createSignal(false);
 const [isPaired, setIsPaired] = createSignal(false);
 const [publicKey, setPublicKey] = createSignal<Uint8Array | null>(null);
 const [secretKey, setSecretKey] = createSignal<Uint8Array | null>(null);
-const [_partnerPublicKey, setPartnerPublicKey] = createSignal<Uint8Array | null>(null);
 const [sharedSecret, setSharedSecret] = createSignal<Uint8Array | null>(null);
 
 export { isReady, isPaired, publicKey, secretKey };
@@ -46,9 +45,6 @@ export async function initialize(): Promise<void> {
   if (identity) {
     setPublicKey(crypto.fromBase64(identity.publicKey));
     setIsPaired(!!identity.pairId && !!identity.partnerPublicKey);
-    if (identity.partnerPublicKey) {
-      setPartnerPublicKey(crypto.fromBase64(identity.partnerPublicKey));
-    }
   }
   setIsReady(true);
 }
@@ -68,7 +64,6 @@ export async function unlock(passphrase: string): Promise<boolean> {
 
     if (identity.partnerPublicKey) {
       const partnerPk = crypto.fromBase64(identity.partnerPublicKey);
-      setPartnerPublicKey(partnerPk);
       setSharedSecret(
         crypto.computeSharedSecret(sk, crypto.fromBase64(identity.publicKey), partnerPk)
       );
@@ -126,7 +121,6 @@ export async function joinHandshake(relayToken: string): Promise<{ partnerPublic
   if (status !== 200) throw new Error(data.error || "Failed to join pair");
 
   const partnerPk = crypto.fromBase64(data.partnerPublicKey);
-  setPartnerPublicKey(partnerPk);
   setIsPaired(true);
 
   const sk = secretKey();
@@ -161,7 +155,6 @@ export async function pollForPartner(): Promise<string | null> {
 export async function completeInitiatorPairing(partnerPublicKeyB64: string): Promise<void> {
   const crypto = await loadCrypto();
   const partnerPk = crypto.fromBase64(partnerPublicKeyB64);
-  setPartnerPublicKey(partnerPk);
   setIsPaired(true);
 
   const pk = publicKey();

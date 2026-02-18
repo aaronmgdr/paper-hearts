@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "@solidjs/router";
 import { initialize, isReady, isPaired, fetchAndDecryptEntries } from "./lib/store";
 import { getDayId } from "./lib/dayid";
 import { flushOutbox, listenForSyncMessages } from "./lib/sync";
+import { registerPush } from "./lib/push";
 import UnlockScreen from "./screens/Unlock";
 
 export default function App(props: ParentProps) {
@@ -30,9 +31,9 @@ export default function App(props: ParentProps) {
           
           if (isPaired()) {
             listenForSyncMessages();
+            registerPush().catch(console.error);
             fetchAndDecryptEntries(getDayId()).catch(console.error);
             flushOutbox().catch(console.error);
-
           }
         }} />}
       >

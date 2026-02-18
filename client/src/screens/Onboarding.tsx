@@ -6,6 +6,7 @@ const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.Q
 
 import { createIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
 import styles from "./Onboarding.module.css";
+import unlockStyles from "./Unlock.module.css";
 
 type Step = "start" | "passphrase" | "show-qr" | "scan-qr" | "linked";
 
@@ -126,10 +127,10 @@ export default function Onboarding() {
           <Match when={step() === "passphrase"}>
             <h2 class={styles.heading}>Choose a passphrase</h2>
             <p class={styles.sub}>This protects your diary on this device.</p>
-            <div class={styles.form}>
+            <div class={unlockStyles.form}>
               <input
                 type="password"
-                class={styles.input}
+                class={unlockStyles.input}
                 placeholder="Passphrase (8+ characters)"
                 value={passphrase()}
                 onInput={(e) => setPassphrase(e.currentTarget.value)}
@@ -137,13 +138,13 @@ export default function Onboarding() {
               />
               <input
                 type="password"
-                class={styles.input}
+                class={unlockStyles.input}
                 placeholder="Confirm passphrase"
                 value={confirm()}
                 onInput={(e) => setConfirm(e.currentTarget.value)}
               />
               <Show when={error()}>
-                <p class={styles.error}>{error()}</p>
+                <p class={unlockStyles.error}>{error()}</p>
               </Show>
               <button
                 class="btn-primary"
