@@ -1,10 +1,11 @@
 import { createSignal } from "solid-js";
-import type { EncryptedKey } from "./crypto";
+import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getDayId } from "./dayid";
 import { enqueue } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
+import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
 
 const loadCrypto = () => import("./crypto");
 
@@ -72,6 +73,73 @@ export async function unlock(passphrase: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ── Biometric unlock (WebAuthn PRF) ─────────────────────────
+
+/** Check if the stored identity has a PRF credential. */
+export async function hasPrfCredential(): Promise<boolean> {
+  const identity = await storage.loadIdentity();
+  return !!identity?.prfEncryptedKey;
+}
+
+/** Unlock using WebAuthn PRF (biometric). Triggers biometric prompt. */
+export async function unlockWithPrf(): Promise<boolean> {
+  const identity = await storage.loadIdentity();
+  if (!identity?.prfEncryptedKey) return false;
+
+  try {
+    const crypto = await loadCrypto();
+    const credentialId = crypto.fromBase64(identity.prfEncryptedKey.credentialId);
+    const prfKey = await authenticateWithPrf(credentialId);
+
+    const encrypted: PrfEncryptedKey = {
+      nonce: crypto.fromBase64(identity.prfEncryptedKey.nonce),
+      ciphertext: crypto.fromBase64(identity.prfEncryptedKey.ciphertext),
+    };
+    const sk = crypto.decryptSecretKeyRaw(encrypted, prfKey);
+    setSecretKey(sk);
+    setPublicKey(crypto.fromBase64(identity.publicKey));
+
+    if (identity.partnerPublicKey) {
+      const partnerPk = crypto.fromBase64(identity.partnerPublicKey);
+      setSharedSecret(
+        crypto.computeSharedSecret(sk, crypto.fromBase64(identity.publicKey), partnerPk)
+      );
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Enable biometric unlock. Secret key must already be in memory (after passphrase unlock). */
+export async function enableBiometrics(): Promise<void> {
+  const sk = secretKey();
+  const pk = publicKey();
+  if (!sk || !pk) throw new Error("Not unlocked");
+
+  const crypto = await loadCrypto();
+  const { credentialId, prfKey } = await registerPrfCredential(pk);
+  const encrypted = crypto.encryptSecretKeyRaw(sk, prfKey);
+
+  const identity = await storage.loadIdentity();
+  if (!identity) throw new Error("No identity");
+
+  identity.prfEncryptedKey = {
+    credentialId: crypto.toBase64(credentialId),
+    nonce: crypto.toBase64(encrypted.nonce),
+    ciphertext: crypto.toBase64(encrypted.ciphertext),
+  };
+  await storage.saveIdentity(identity);
+}
+
+/** Disable biometric unlock. */
+export async function disableBiometrics(): Promise<void> {
+  const identity = await storage.loadIdentity();
+  if (!identity) return;
+  delete identity.prfEncryptedKey;
+  await storage.saveIdentity(identity);
 }
 
 // ── Onboarding ──────────────────────────────────────────────

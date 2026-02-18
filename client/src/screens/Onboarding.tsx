@@ -4,11 +4,12 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 
 const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
-import { createIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
+import { createIdentity, initiateHandshake, joinHandshake, pollForPartner, enableBiometrics } from "../lib/store";
+import { isPrfSupported } from "../lib/webauthn";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
-type Step = "start" | "passphrase" | "show-qr" | "scan-qr" | "linked";
+type Step = "start" | "passphrase" | "biometrics" | "show-qr" | "scan-qr" | "linked";
 
 export default function Onboarding() {
   const [searchParams] = useSearchParams();
@@ -44,20 +45,42 @@ export default function Onboarding() {
     try {
       await createIdentity(passphrase());
 
-      if (role() === "initiator") {
-        const { relayToken } = await initiateHandshake();
-        const url = new URL(window.location.href)
-        url.searchParams.set("token", relayToken);
-        setQrData(url.toString());
-        setStep("show-qr");
-        startPolling();
+      // Check if device supports biometric unlock
+      const prfOk = await isPrfSupported();
+      if (prfOk) {
+        setStep("biometrics");
       } else {
-        setStep("scan-qr");
+        proceedAfterPassphrase();
       }
     } catch (e: any) {
       setError(e.message || "Something went wrong.");
     }
     setLoading(false);
+  }
+
+  async function proceedAfterPassphrase() {
+    if (role() === "initiator") {
+      const { relayToken } = await initiateHandshake();
+      const url = new URL(window.location.href);
+      url.searchParams.set("token", relayToken);
+      setQrData(url.toString());
+      setStep("show-qr");
+      startPolling();
+    } else {
+      setStep("scan-qr");
+    }
+  }
+
+  async function handleEnableBiometrics() {
+    setLoading(true);
+    setError("");
+    try {
+      await enableBiometrics();
+    } catch (e: any) {
+      console.error("Biometric setup failed:", e);
+    }
+    setLoading(false);
+    proceedAfterPassphrase();
   }
 
   async function handleJoin() {
@@ -152,6 +175,19 @@ export default function Onboarding() {
                 disabled={loading()}
               >
                 {loading() ? "Setting up..." : "Continue"}
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "biometrics"}>
+            <h2 class={styles.heading}>Enable biometric unlock?</h2>
+            <p class={styles.sub}>Use Face ID or Touch ID to unlock your diary.</p>
+            <div class={styles.actions}>
+              <button class="btn-primary" onClick={handleEnableBiometrics} disabled={loading()}>
+                {loading() ? "Setting up..." : "Enable biometrics"}
+              </button>
+              <button class="btn-secondary" onClick={() => proceedAfterPassphrase()}>
+                Skip
               </button>
             </div>
           </Match>

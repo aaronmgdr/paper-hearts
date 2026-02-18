@@ -136,3 +136,32 @@ export function decryptSecretKey(
     derived
   );
 }
+
+// ── Key-at-rest encryption (raw key, for WebAuthn PRF) ──────
+
+export interface PrfEncryptedKey {
+  nonce: Uint8Array;
+  ciphertext: Uint8Array;
+}
+
+/** Encrypt the secret key using a raw 32-byte wrapping key (from PRF). */
+export function encryptSecretKeyRaw(
+  secretKey: Uint8Array,
+  wrappingKey: Uint8Array
+): PrfEncryptedKey {
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const ciphertext = sodium.crypto_secretbox_easy(secretKey, nonce, wrappingKey);
+  return { nonce, ciphertext };
+}
+
+/** Decrypt the secret key using a raw 32-byte wrapping key (from PRF). */
+export function decryptSecretKeyRaw(
+  encrypted: PrfEncryptedKey,
+  wrappingKey: Uint8Array
+): Uint8Array {
+  return sodium.crypto_secretbox_open_easy(
+    encrypted.ciphertext,
+    encrypted.nonce,
+    wrappingKey
+  );
+}

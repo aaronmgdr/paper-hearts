@@ -2,15 +2,29 @@ import { createSignal, onMount } from "solid-js";
 import { A } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush } from "../lib/push";
+import { isPrfSupported } from "../lib/webauthn";
+import { enableBiometrics, disableBiometrics, hasPrfCredential } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
   const [pushOn, setPushOn] = createSignal(false);
   const [pushLoading, setPushLoading] = createSignal(true);
+  const [bioSupported, setBioSupported] = createSignal(false);
+  const [bioOn, setBioOn] = createSignal(false);
+  const [bioLoading, setBioLoading] = createSignal(true);
 
   onMount(async () => {
+    // Check push status
     setPushOn(await isPushEnabled());
     setPushLoading(false);
+
+    // Check biometrics status
+    const supported = await isPrfSupported();
+    setBioSupported(supported);
+    if (supported) {
+      setBioOn(await hasPrfCredential());
+    }
+    setBioLoading(false);
   });
 
   async function togglePush() {
@@ -30,6 +44,22 @@ export default function Settings() {
     setPushLoading(false);
   }
 
+  async function toggleBiometrics() {
+    setBioLoading(true);
+    try {
+      if (bioOn()) {
+        await disableBiometrics();
+        setBioOn(false);
+      } else {
+        await enableBiometrics();
+        setBioOn(true);
+      }
+    } catch (e) {
+      console.error("Biometrics toggle failed:", e);
+    }
+    setBioLoading(false);
+  }
+
   return (
     <div class="page">
       <header class={styles.header}>
@@ -41,6 +71,12 @@ export default function Settings() {
           <span>Notifications</span>
           <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
         </button>
+        {bioSupported() && (
+          <button class={styles.item} onClick={toggleBiometrics} disabled={bioLoading()}>
+            <span>Biometrics</span>
+            <span class="meta">{bioLoading() ? "..." : bioOn() ? "On" : "Off"}</span>
+          </button>
+        )}
         <button class={styles.item} onClick={() => { /* TODO */ }}>
           Change passphrase
         </button>

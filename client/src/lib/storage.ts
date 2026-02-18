@@ -10,10 +10,20 @@ async function getDir(name: string): Promise<FileSystemDirectoryHandle> {
 }
 
 async function writeFile(dir: FileSystemDirectoryHandle, name: string, data: string) {
-  const file = await dir.getFileHandle(name, { create: true });
-  const writable = await file.createWritable();
-  await writable.write(data);
-  await writable.close();
+  const handle = await dir.getFileHandle(name, { create: true });
+  // Safari doesn't support createWritable() on OPFS — use sync access handle as fallback
+  if ("createWritable" in handle) {
+    const writable = await handle.createWritable();
+    await writable.write(data);
+    await writable.close();
+  } else {
+    const accessHandle = await (handle as any).createSyncAccessHandle();
+    const encoded = new TextEncoder().encode(data);
+    accessHandle.truncate(0);
+    accessHandle.write(encoded, { at: 0 });
+    accessHandle.flush();
+    accessHandle.close();
+  }
 }
 
 async function readFile(dir: FileSystemDirectoryHandle, name: string): Promise<string | null> {
@@ -34,6 +44,11 @@ export interface StoredIdentity {
     salt: string;
     nonce: string;
     ciphertext: string;
+  };
+  prfEncryptedKey?: {
+    credentialId: string; // base64
+    nonce: string;        // base64
+    ciphertext: string;   // base64
   };
   pairId: string | null;
   partnerPublicKey: string | null;
