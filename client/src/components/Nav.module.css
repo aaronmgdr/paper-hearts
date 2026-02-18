@@ -1,0 +1,35 @@
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  height: 56px;
+  background: var(--parchment);
+  border-top: 1px solid var(--veiled);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 100;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: color 120ms var(--ease-out);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+}
+
+.active {
+  color: var(--blush);
+}

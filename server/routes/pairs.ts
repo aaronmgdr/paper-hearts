@@ -1,5 +1,6 @@
 import sodium from "libsodium-wrappers-sumo";
 import sql from "../db";
+import { verifyRequest, AuthError } from "../auth";
 
 await sodium.ready;
 
@@ -30,9 +31,12 @@ export async function initiate(req: Request): Promise<Response> {
     return Response.json({ error: "Invalid base64 public key" }, { status: 400 });
   }
 
+  console.log(`[initiate] publicKey=${publicKey.slice(0, 8)}…`);
+
   // Check if this key is already registered
   const existing = await sql`SELECT public_key FROM users WHERE public_key = ${publicKey}`;
   if (existing.length > 0) {
+    console.log(`[initiate] REJECTED: key already registered`);
     return Response.json({ error: "Public key already registered" }, { status: 409 });
   }
 
@@ -59,6 +63,7 @@ export async function initiate(req: Request): Promise<Response> {
     return { pairId: pair.id, relayToken: token };
   });
 
+  console.log(`[initiate] OK pairId=${result.pairId} token=${result.relayToken.slice(0, 8)}…`);
   return Response.json(result, { status: 201 });
 }
 
@@ -69,6 +74,8 @@ export async function initiate(req: Request): Promise<Response> {
 export async function join(req: Request): Promise<Response> {
   const body = await req.json();
   const { publicKey, relayToken } = body;
+
+  console.log(`[join] publicKey=${publicKey?.slice(0, 8)}… token=${relayToken?.slice(0, 8)}…`);
 
   if (!publicKey || typeof publicKey !== "string") {
     return Response.json({ error: "publicKey is required" }, { status: 400 });
@@ -98,20 +105,25 @@ export async function join(req: Request): Promise<Response> {
   `;
 
   if (tokens.length === 0) {
+    console.log(`[join] REJECTED: token not found`);
     return Response.json({ error: "Invalid relay token" }, { status: 404 });
   }
 
   const tokenRow = tokens[0];
+  console.log(`[join] token found: pairId=${tokenRow.pair_id} consumed=${tokenRow.consumed} expires=${tokenRow.expires_at}`);
 
   if (tokenRow.consumed) {
+    console.log(`[join] REJECTED: token already consumed`);
     return Response.json({ error: "Token already consumed" }, { status: 410 });
   }
 
   if (new Date(tokenRow.expires_at) < new Date()) {
+    console.log(`[join] REJECTED: token expired`);
     return Response.json({ error: "Token expired" }, { status: 410 });
   }
 
   if (publicKey === tokenRow.initiator_key) {
+    console.log(`[join] REJECTED: same key as initiator`);
     return Response.json({ error: "Cannot join your own pair" }, { status: 400 });
   }
 
@@ -132,5 +144,41 @@ export async function join(req: Request): Promise<Response> {
     };
   });
 
+  console.log(`[join] OK pairId=${result.pairId} partnerKey=${result.partnerPublicKey.slice(0, 8)}…`);
   return Response.json(result, { status: 200 });
+}
+
+/**
+ * GET /api/pairs/status
+ * Authenticated. Returns partner's public key if one has joined.
+ * Used by the initiator to poll for follower completion.
+ */
+export async function pairStatus(req: Request, path: string): Promise<Response> {
+  let auth;
+  try {
+    auth = await verifyRequest(req, path, null);
+  } catch (e) {
+    if (e instanceof AuthError) {
+      return Response.json({ error: e.message }, { status: e.status });
+    }
+    throw e;
+  }
+
+  console.log(`[pairStatus] user=${auth.publicKey.slice(0, 8)}… pairId=${auth.pairId}`);
+
+  const partners = await sql`
+    SELECT public_key FROM users
+    WHERE pair_id = ${auth.pairId} AND public_key != ${auth.publicKey}
+  `;
+
+  if (partners.length === 0) {
+    console.log(`[pairStatus] no partner yet`);
+    return Response.json({ paired: false });
+  }
+
+  console.log(`[pairStatus] partner found: ${partners[0].public_key.slice(0, 8)}…`);
+  return Response.json({
+    paired: true,
+    partnerPublicKey: partners[0].public_key,
+  });
 }

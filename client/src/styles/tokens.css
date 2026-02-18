@@ -1,0 +1,40 @@
+:root {
+  /* Primary */
+  --parchment: #FDF6EC;
+  --ink: #2C2C2C;
+  --blush: #E8A0BF;
+  --rose: #C76B9B;
+  --dusty-mauve: #9B7B8E;
+
+  /* Supporting */
+  --veiled: #D4C5B9;
+  --revealed: #F9E8D0;
+  --soft-red: #D94F4F;
+  --sage: #8FB39A;
+
+  /* Typography */
+  --font-heading: "Playfair Display", Georgia, serif;
+  --font-body: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+  --font-ui: "Inter", system-ui, sans-serif;
+
+  /* Spacing (8px grid) */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Layout */
+  --max-content: 480px;
+  --padding-x: 24px;
+
+  /* Animation */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}

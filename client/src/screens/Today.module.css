@@ -1,0 +1,70 @@
+.header {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-3);
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: calc(56px + var(--space-3));
+}
+
+.entryCard {
+  background: var(--revealed);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+}
+
+.entryText {
+  margin-top: var(--space-1);
+}
+
+.emptyCard {
+  padding: var(--space-4) var(--space-3);
+  text-align: center;
+}
+.linkCompose {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 120ms var(--ease-out);
+}
+.linkCompose:active {
+  color: black;
+}
+
+.veil {
+  background: var(--veiled);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.veilHeart {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.revealed {
+  animation: revealEntry 400ms var(--ease-out) both;
+}
+
+@keyframes revealEntry {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

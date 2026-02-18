@@ -1,0 +1,206 @@
+import { createSignal, Match, Switch, Show, onCleanup } from "solid-js";
+import { useNavigate, useSearchParams } from "@solidjs/router";
+import { QRCodeSVG, type QRSVGProps } from "solid-qr-code";
+
+import { createIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
+import styles from "./Onboarding.module.css";
+
+type Step = "start" | "passphrase" | "show-qr" | "scan-qr" | "linked";
+
+export default function Onboarding() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [step, setStep] = createSignal<Step>(searchParams.token ? "passphrase" : "start");
+  const [role, setRole] = createSignal<"initiator" | "follower">(searchParams.token ? "follower" : "initiator");
+  const [passphrase, setPassphrase] = createSignal("");
+  const [confirm, setConfirm] = createSignal("");
+  const [error, setError] = createSignal("");
+  const [qrData, setQrData] = createSignal("");
+  const [tokenInput, setTokenInput] = createSignal(searchParams.token as string || "");
+  const [loading, setLoading] = createSignal(false);
+
+  
+
+  function chooseRole(r: "initiator" | "follower") {
+    setRole(r);
+    setStep("passphrase");
+  }
+
+  async function handlePassphrase() {
+    if (passphrase().length < 4) {
+      setError("At least 4 characters.");
+      return;
+    }
+    if (passphrase() !== confirm()) {
+      setError("Passphrases don't match.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+
+    try {
+      await createIdentity(passphrase());
+
+      if (role() === "initiator") {
+        const { relayToken } = await initiateHandshake();
+        const url = new URL(window.location.href)
+        url.searchParams.set("token", relayToken);
+        setQrData(url.toString());
+        setStep("show-qr");
+        startPolling();
+      } else {
+        setStep("scan-qr");
+      }
+    } catch (e: any) {
+      setError(e.message || "Something went wrong.");
+    }
+    setLoading(false);
+  }
+
+  async function handleJoin() {
+    const token = tokenInput().trim();
+    if (!token) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      await joinHandshake(token);
+      setStep("linked");
+      setTimeout(() => navigate("/compose", { replace: true }), 1500);
+    } catch (e: any) {
+      setError(e.message || "Invalid code.");
+    }
+    setLoading(false);
+  }
+
+  
+  
+
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+  function startPolling() {
+    pollTimer = setInterval(async () => {
+      const partner = await pollForPartner();
+      if (partner) {
+        clearInterval(pollTimer);
+        setStep("linked");
+        setTimeout(() => navigate("/compose", { replace: true }), 1500);
+      }
+    }, 3000);
+  }
+
+  onCleanup(() => {
+    if (pollTimer) clearInterval(pollTimer);
+  });
+
+  const qrCode: QRSVGProps = {
+    value: qrData(),
+    level: "low",
+    backgroundColor: "transparent",
+    backgroundAlpha: 1,
+    foregroundColor: "black",
+    foregroundAlpha: 1,
+    width: 256,
+    height: 256,
+  };
+
+  return (
+    <div class="page">
+      <div class={styles.center}>
+        <Switch>
+          <Match when={step() === "start"}>
+            <h1 class={styles.heading}>Start your diary</h1>
+            <p class={styles.sub}>Paper Hearts is a private shared diary for two.</p>
+            <div class={styles.actions}>
+              <button class="btn-primary" onClick={() => chooseRole("initiator")}>
+                I'll start — show my code
+              </button>
+              <button class="btn-secondary" onClick={() => chooseRole("follower")}>
+                I have a code to scan
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "passphrase"}>
+            <h2 class={styles.heading}>Choose a passphrase</h2>
+            <p class={styles.sub}>This protects your diary on this device.</p>
+            <div class={styles.form}>
+              <input
+                type="password"
+                class={styles.input}
+                placeholder="Passphrase (8+ characters)"
+                value={passphrase()}
+                onInput={(e) => setPassphrase(e.currentTarget.value)}
+                autofocus
+              />
+              <input
+                type="password"
+                class={styles.input}
+                placeholder="Confirm passphrase"
+                value={confirm()}
+                onInput={(e) => setConfirm(e.currentTarget.value)}
+              />
+              <Show when={error()}>
+                <p class={styles.error}>{error()}</p>
+              </Show>
+              <button
+                class="btn-primary"
+                onClick={handlePassphrase}
+                disabled={loading()}
+              >
+                {loading() ? "Setting up..." : "Continue"}
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "show-qr"}>
+            <h2 class={styles.heading}>Show this to your person</h2>
+            <div class={styles.qrFrame}>
+              <div class={styles.tokenDisplay}>
+                <QRCodeSVG {...qrCode} />
+              </div>
+            </div>
+            <span class="label" style={{ "text-align": "center" }}>{qrData()}</span>
+            <p class="label" style={{ "text-align": "center" }}>
+              Share this code with your partner. It expires in 10 minutes.
+            </p>
+          </Match>
+
+          <Match when={step() === "scan-qr"}>
+            <h2 class={styles.heading}>Enter your partner's code</h2>
+            <div class={styles.form}>
+              <input
+                type="text"
+                class={styles.input}
+                placeholder="Paste the code here"
+                value={tokenInput()}
+                onInput={(e) => setTokenInput(e.currentTarget.value)}
+                autofocus
+              />
+              <Show when={error()}>
+                <p class={styles.error}>{error()}</p>
+              </Show>
+              <button
+                class="btn-primary"
+                onClick={handleJoin}
+                disabled={loading() || !tokenInput().trim()}
+              >
+                {loading() ? "Linking..." : "Link diaries"}
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "linked"}>
+            <div class={styles.linkedAnim} aria-label="You're linked">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </div>
+            <h2 class={styles.heading}>You're linked.</h2>
+            <p class={styles.sub}>Your diaries are now connected.</p>
+          </Match>
+        </Switch>
+      </div>
+    </div>
+  );
+}

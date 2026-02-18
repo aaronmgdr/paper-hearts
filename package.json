@@ -4,9 +4,12 @@
   "workspaces": ["client", "server"],
   "scripts": {
     "dev:client": "cd client && bun run dev",
-    "dev:server": "bun run server/index.ts",
+    "dev:server": "cd server && bun run dev",
     "build": "cd client && bun run build",
-    "start": "bun run server/migrate.ts && bun run server/index.ts",
-    "migrate": "bun run server/migrate.ts"
+    "start": "cd server && bun run start",
+    "migrate": "cd server && bun run migrate"
+  },
+  "dependencies": {
+    "solid-qr-code": "^0.1.11"
   }
 }

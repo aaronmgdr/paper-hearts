@@ -31,6 +31,7 @@ export async function verifyRequest(
   const timestamp = req.headers.get("X-Timestamp");
 
   if (!authHeader || !publicKeyB64 || !timestamp) {
+    console.log(`[auth] FAIL: missing headers (auth=${!!authHeader} key=${!!publicKeyB64} ts=${!!timestamp})`);
     throw new AuthError("Missing auth headers", 401);
   }
 
@@ -87,6 +88,7 @@ export async function verifyRequest(
     publicKeyBytes
   );
   if (!valid) {
+    console.log(`[auth] FAIL: invalid signature for key=${publicKeyB64.slice(0, 8)}…`);
     throw new AuthError("Invalid signature", 401);
   }
 

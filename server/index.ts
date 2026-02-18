@@ -1,5 +1,5 @@
 import { join } from "path";
-import { initiate, join as joinPair } from "./routes/pairs";
+import { initiate, join as joinPair, pairStatus } from "./routes/pairs";
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
 
 const PORT = parseInt(process.env.PORT || "3000");
@@ -32,9 +32,13 @@ const server = Bun.serve({
 
     // API routes
     if (path.startsWith("/api/")) {
-      // Throttle check for authenticated routes
       const publicKey = req.headers.get("X-Public-Key");
+      const keyShort = publicKey ? publicKey.slice(0, 8) + "…" : "anon";
+      console.log(`→ ${req.method} ${path} [${keyShort}]`);
+
+      // Throttle check for authenticated routes
       if (publicKey && !checkThrottle(publicKey)) {
+        console.log(`← 429 throttled [${keyShort}]`);
         return Response.json(
           { error: "Too many requests" },
           { status: 429 }
@@ -42,9 +46,11 @@ const server = Bun.serve({
       }
 
       try {
-        return await handleApi(req, path);
+        const res = await handleApi(req, path);
+        console.log(`← ${res.status} ${req.method} ${path} [${keyShort}]`);
+        return res;
       } catch (e) {
-        console.error(`Error handling ${req.method} ${path}:`, e);
+        console.error(`← 500 ${req.method} ${path} [${keyShort}]`, e);
         return Response.json(
           { error: "Internal server error" },
           { status: 500 }
@@ -64,6 +70,9 @@ async function handleApi(req: Request, path: string): Promise<Response> {
   }
   if (path === "/api/pairs/join" && req.method === "POST") {
     return joinPair(req);
+  }
+  if (path === "/api/pairs/status" && req.method === "GET") {
+    return pairStatus(req, path);
   }
 
   // Authenticated entry routes

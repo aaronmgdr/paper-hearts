@@ -23,6 +23,8 @@ export async function createEntry(req: Request, path: string): Promise<Response>
   const body = JSON.parse(new TextDecoder().decode(bodyBytes));
   const { dayId, payload } = body;
 
+  console.log(`[createEntry] user=${auth.publicKey.slice(0, 8)}… dayId=${dayId} payloadLen=${payload?.length ?? 0}`);
+
   if (!dayId || typeof dayId !== "string") {
     return Response.json({ error: "dayId is required" }, { status: 400 });
   }
@@ -55,6 +57,7 @@ export async function createEntry(req: Request, path: string): Promise<Response>
     RETURNING id
   `;
 
+  console.log(`[createEntry] OK id=${entry.id}`);
   return Response.json({ id: entry.id, status: "stored" }, { status: 201 });
 }
 
@@ -75,6 +78,7 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
 
   const url = new URL(req.url);
   const since = url.searchParams.get("since") || "1970-01-01";
+  console.log(`[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since}`);
 
   // Find the partner's public key
   const partners = await sql`
@@ -116,6 +120,7 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
     payload: Buffer.from(e.payload).toString("base64"),
   }));
 
+  console.log(`[getEntries] returning ${result.length} entries`);
   return Response.json({ entries: result });
 }
 
@@ -138,6 +143,8 @@ export async function ackEntries(req: Request, path: string): Promise<Response> 
 
   const body = JSON.parse(new TextDecoder().decode(bodyBytes));
   const { entryIds } = body;
+
+  console.log(`[ackEntries] user=${auth.publicKey.slice(0, 8)}… ids=${JSON.stringify(entryIds)}`);
 
   if (!Array.isArray(entryIds) || entryIds.length === 0) {
     return Response.json({ error: "entryIds array is required" }, { status: 400 });
@@ -164,5 +171,6 @@ export async function ackEntries(req: Request, path: string): Promise<Response> 
     RETURNING id
   `;
 
+  console.log(`[ackEntries] deleted ${deleted.length}`);
   return Response.json({ deleted: deleted.length });
 }

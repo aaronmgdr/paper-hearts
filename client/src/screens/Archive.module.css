@@ -1,0 +1,38 @@
+.header {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(56px + var(--space-3));
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--veiled);
+  text-decoration: none;
+  color: var(--ink);
+  min-height: 44px;
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.dayLabel {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.hearts {
+  display: flex;
+  gap: 4px;
+}

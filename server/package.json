@@ -2,6 +2,9 @@
   "name": "paper-hearts-server",
   "private": true,
   "scripts": {
+    "dev": "bun run index.ts",
+    "start": "bun run migrate.ts && bun run index.ts",
+    "migrate": "bun run migrate.ts",
     "test": "DATABASE_URL=postgres://localhost/paperhearts bun test --timeout 15000"
   },
   "dependencies": {
