@@ -2,6 +2,7 @@ import { type ParentProps, Show, createSignal, onMount } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
 import { initialize, isReady, isPaired, fetchAndDecryptEntries } from "./lib/store";
 import { getDayId } from "./lib/dayid";
+import { flushOutbox, listenForSyncMessages } from "./lib/sync";
 import UnlockScreen from "./screens/Unlock";
 
 export default function App(props: ParentProps) {
@@ -26,8 +27,12 @@ export default function App(props: ParentProps) {
         when={unlocked() || location.pathname === "/onboarding"}
         fallback={<UnlockScreen onUnlocked={() => {
           setUnlocked(true);
+          
           if (isPaired()) {
+            listenForSyncMessages();
             fetchAndDecryptEntries(getDayId()).catch(console.error);
+            flushOutbox().catch(console.error);
+
           }
         }} />}
       >

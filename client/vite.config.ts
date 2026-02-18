@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [
     solid(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
@@ -22,7 +25,7 @@ export default defineConfig({
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,woff2,wasm}"],
       },
     }),

@@ -4,7 +4,7 @@ const BASE = "/api";
 
 // ── Signing helper ──────────────────────────────────────────
 
-async function signedHeaders(
+export async function signedHeaders(
   method: string,
   path: string,
   body: string | null,

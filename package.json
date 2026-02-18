@@ -9,7 +9,5 @@
     "start": "cd server && bun run start",
     "migrate": "cd server && bun run migrate"
   },
-  "dependencies": {
-    "solid-qr-code": "^0.1.11"
-  }
+  "dependencies": {}
 }

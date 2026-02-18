@@ -3,6 +3,8 @@ import * as crypto from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getDayId } from "./dayid";
+import { enqueue } from "./outbox";
+import { flushOutbox, requestBackgroundSync } from "./sync";
 
 // ── Reactive state ──────────────────────────────────────────
 
@@ -152,7 +154,7 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
 // ── Entries ─────────────────────────────────────────────────
 
 export async function submitEntry(text: string): Promise<void> {
-    const dayId = getDayId();
+  const dayId = getDayId();
 
   // Save locally
   const existing = (await storage.loadDay(dayId)) || { entries: [] };
@@ -164,11 +166,9 @@ export async function submitEntry(text: string): Promise<void> {
   });
   await storage.saveDay(dayId, existing);
 
-
-  const pk = publicKey();
-  const sk = secretKey();
+  // Encrypt and queue for relay
   const ss = sharedSecret();
-  if (!pk || !sk || !ss) throw new Error("Not unlocked or not paired");
+  if (!ss) throw new Error("Not unlocked or not paired");
 
   const plaintext = JSON.stringify({
     text,
@@ -179,8 +179,9 @@ export async function submitEntry(text: string): Promise<void> {
   const encrypted = crypto.encrypt(plaintext, ss);
   const payloadB64 = crypto.toBase64(encrypted);
 
-  const { status, data } = await relay.postEntry(dayId, payloadB64, pk, sk);
-  if (status !== 201) throw new Error(data.error || "Failed to send entry");
+  await enqueue(dayId, payloadB64);
+  requestBackgroundSync().catch(console.error);
+  flushOutbox().catch(console.error);
 }
 
 export async function fetchAndDecryptEntries(since: string): Promise<void> {
