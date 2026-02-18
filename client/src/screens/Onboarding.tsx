@@ -66,7 +66,7 @@ export default function Onboarding() {
     try {
       await joinHandshake(token);
       setStep("linked");
-      setTimeout(() => navigate("/compose", { replace: true }), 1500);
+      setTimeout(() => navigate("/", { replace: true }), 1500);
     } catch (e: any) {
       setError(e.message || "Invalid code.");
     }
@@ -84,7 +84,7 @@ export default function Onboarding() {
       if (partner) {
         clearInterval(pollTimer);
         setStep("linked");
-        setTimeout(() => navigate("/compose", { replace: true }), 1500);
+        setTimeout(() => navigate("/", { replace: true }), 1500);
       }
     }, 3000);
   }
