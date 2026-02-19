@@ -3,7 +3,7 @@ import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getDayId } from "./dayid";
-import { enqueue } from "./outbox";
+import { enqueue, peekAll } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
 import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
 
@@ -16,8 +16,26 @@ const [isPaired, setIsPaired] = createSignal(false);
 const [publicKey, setPublicKey] = createSignal<Uint8Array | null>(null);
 const [secretKey, setSecretKey] = createSignal<Uint8Array | null>(null);
 const [sharedSecret, setSharedSecret] = createSignal<Uint8Array | null>(null);
+const [pendingCount, setPendingCount] = createSignal(0);
+const [isOnline, setIsOnline] = createSignal(navigator.onLine);
 
-export { isReady, isPaired, publicKey, secretKey };
+export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline };
+
+export async function refreshPendingCount(): Promise<void> {
+  const items = await peekAll();
+  setPendingCount(items.length);
+}
+
+export function setupNetworkListeners(): void {
+  window.addEventListener("online", () => {
+    setIsOnline(true);
+    if (isPaired()) {
+      flushOutbox().catch(console.error);
+      fetchAndDecryptEntries(getDayId()).catch(console.error);
+    }
+  });
+  window.addEventListener("offline", () => setIsOnline(false));
+}
 
 // ── Helpers (moved from storage.ts to avoid its crypto dependency) ──
 
@@ -268,6 +286,7 @@ export async function submitEntry(text: string): Promise<void> {
   const payloadB64 = crypto.toBase64(encrypted);
 
   await enqueue(dayId, payloadB64);
+  await refreshPendingCount();
   requestBackgroundSync().catch(console.error);
   flushOutbox().catch(console.error);
 }

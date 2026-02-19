@@ -60,12 +60,20 @@ export default function Onboarding() {
 
   async function proceedAfterPassphrase() {
     if (role() === "initiator") {
-      const { relayToken } = await initiateHandshake();
-      const url = new URL(window.location.href);
-      url.searchParams.set("token", relayToken);
-      setQrData(url.toString());
-      setStep("show-qr");
-      startPolling();
+      setLoading(true);
+      setError("");
+      try {
+        const { relayToken } = await initiateHandshake();
+        const url = new URL(window.location.href);
+        url.searchParams.set("token", relayToken);
+        setQrData(url.toString());
+        setStep("show-qr");
+        startPolling();
+      } catch (e: any) {
+        setError(e.message || "Couldn't reach server. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     } else {
       setStep("scan-qr");
     }
@@ -79,8 +87,7 @@ export default function Onboarding() {
     } catch (e: any) {
       console.error("Biometric setup failed:", e);
     }
-    setLoading(false);
-    proceedAfterPassphrase();
+    await proceedAfterPassphrase();
   }
 
   async function handleJoin() {
@@ -186,10 +193,13 @@ export default function Onboarding() {
               <button class="btn-primary" onClick={handleEnableBiometrics} disabled={loading()}>
                 {loading() ? "Setting up..." : "Enable biometrics"}
               </button>
-              <button class="btn-secondary" onClick={() => proceedAfterPassphrase()}>
+              <button class="btn-secondary" onClick={() => proceedAfterPassphrase()} disabled={loading()}>
                 Skip
               </button>
             </div>
+            <Show when={error()}>
+              <p class={unlockStyles.error}>{error()}</p>
+            </Show>
           </Match>
 
           <Match when={step() === "show-qr"}>

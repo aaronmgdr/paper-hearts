@@ -1,6 +1,6 @@
 import { peekAll, remove } from "./outbox";
 import { signedHeaders } from "./relay";
-import { publicKey, secretKey } from "./store";
+import { publicKey, secretKey, refreshPendingCount } from "./store";
 
 const API_ENTRIES = "/api/entries";
 
@@ -26,6 +26,7 @@ export async function flushOutbox(): Promise<void> {
       // Network error — item stays in outbox for next flush
     }
   }
+  await refreshPendingCount();
 }
 
 /** Register BackgroundSync tag (Android/Chrome only, no-op on Safari). */

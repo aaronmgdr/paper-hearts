@@ -1,6 +1,6 @@
 import { type ParentProps, Show, createSignal, onMount } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { initialize, isReady, isPaired, fetchAndDecryptEntries } from "./lib/store";
+import { initialize, isReady, isPaired, fetchAndDecryptEntries, setupNetworkListeners } from "./lib/store";
 import { getDayId } from "./lib/dayid";
 import { flushOutbox, listenForSyncMessages } from "./lib/sync";
 import { registerPush } from "./lib/push";
@@ -13,6 +13,7 @@ export default function App(props: ParentProps) {
 
   onMount(async () => {
     await initialize();
+    setupNetworkListeners();
     // If no identity exists, go to onboarding
     const { loadIdentity } = await import("./lib/storage");
     const identity = await loadIdentity();

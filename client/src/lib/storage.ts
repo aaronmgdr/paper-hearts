@@ -86,9 +86,7 @@ export async function saveDay(dayId: string, day: DayFile): Promise<void> {
 
 export async function loadDay(dayId: string): Promise<DayFile | null> {
   const dir = await getDir("entries");
-  console.log("Loading day file for", dayId);
   const data = await readFile(dir, `${dayId}.json`);
-  console.log("Loaded data:", data);
   if (!data) return null;
   return JSON.parse(data);
 }
