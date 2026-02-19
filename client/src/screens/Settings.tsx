@@ -12,6 +12,7 @@ export default function Settings() {
   const [bioSupported, setBioSupported] = createSignal(false);
   const [bioOn, setBioOn] = createSignal(false);
   const [bioLoading, setBioLoading] = createSignal(true);
+  const [devMode, setDevMode] = createSignal(sessionStorage.getItem("devMode") === "1");
 
   onMount(async () => {
     // Check push status
@@ -42,6 +43,13 @@ export default function Settings() {
       console.error("Push toggle failed:", e);
     }
     setPushLoading(false);
+  }
+
+  function toggleDevMode() {
+    const next = !devMode();
+    setDevMode(next);
+    if (next) sessionStorage.setItem("devMode", "1");
+    else sessionStorage.removeItem("devMode");
   }
 
   async function toggleBiometrics() {
@@ -87,6 +95,10 @@ export default function Settings() {
           <span>About Paper Hearts</span>
           <span class="meta">v1.0.0</span>
         </div>
+        <button class={styles.item} onClick={toggleDevMode}>
+          <span>Developer mode</span>
+          <span class="meta">{devMode() ? "On" : "Off"}</span>
+        </button>
       </div>
 
       <Nav />

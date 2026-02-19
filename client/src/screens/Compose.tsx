@@ -19,7 +19,7 @@ export default function Compose() {
     setSending(true);
     try {
       console.log("Submitting entry for", dayId, content);
-      await submitEntry(content);
+      await submitEntry(content, dayId);
       setSent(true);
       setTimeout(() => navigate("/"), 800);
     } catch (e) {

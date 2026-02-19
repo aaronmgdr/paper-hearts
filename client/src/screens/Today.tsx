@@ -1,5 +1,5 @@
 import { createSignal, Show, createResource, Suspense } from "solid-js";
-import { useParams } from "@solidjs/router";
+import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Today.module.css";
@@ -39,8 +39,11 @@ function applyDayFile(dayFile: Awaited<ReturnType<typeof loadDayEntries>>, resul
   });
 }
 
+const isDevMode = () => sessionStorage.getItem("devMode") === "1";
+
 export default function Today() {
   const params = useParams<{ dayId?: string }>();
+  const navigate = useNavigate();
   const dayId = () => params.dayId || getDayId();
   const isToday = () => !params.dayId || params.dayId === getDayId();
 
@@ -51,7 +54,7 @@ export default function Today() {
   const [myExpanded, setMyExpanded] = createSignal(false);
 
   const bothRevealed = () => entries()?.mine != null && entries()?.partner != null;
-  const showCompose = () => isToday() && entries()?.mine == null;
+  const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
 
   async function handleSubmit() {
     const content = text().trim();
@@ -59,7 +62,7 @@ export default function Today() {
 
     setSending(true);
     try {
-      await submitEntry(content);
+      await submitEntry(content, dayId());
       setSent(true);
       mutate((prev) => ({ mine: content, partner: prev?.partner ?? null }));
     } catch (e) {
@@ -72,6 +75,17 @@ export default function Today() {
     <div class="page">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId())}</h2>
+        <Show when={isDevMode() && isToday()}>
+          <input
+            type="date"
+            class={styles.devDateInput}
+            max={getDayId()}
+            onChange={(e) => {
+              const val = e.currentTarget.value;
+              if (val) navigate(`/archive/${val}`);
+            }}
+          />
+        </Show>
       </header>
 
       <Suspense>

@@ -22,7 +22,8 @@ export async function flushOutbox(): Promise<void> {
       if (res.ok) {
         await remove(item.id);
       }
-    } catch {
+    } catch (err) {
+      console.info("Failed to flush outbox item", item.id, err);
       // Network error — item stays in outbox for next flush
     }
   }

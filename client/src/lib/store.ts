@@ -258,9 +258,7 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
 
 // ── Entries ─────────────────────────────────────────────────
 
-export async function submitEntry(text: string): Promise<void> {
-  const dayId = getDayId();
-
+export async function submitEntry(text: string, dayId: string): Promise<void> {
   // Save locally
   const existing = (await storage.loadDay(dayId)) || { entries: [] };
   existing.entries.push({

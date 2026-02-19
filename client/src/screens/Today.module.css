@@ -3,6 +3,17 @@
   padding-bottom: var(--space-3);
 }
 
+.devDateInput {
+  margin-top: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--dusty-mauve);
+  background: transparent;
+  border: 1px dashed var(--veiled);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
 .entries {
   display: flex;
   flex-direction: column;
