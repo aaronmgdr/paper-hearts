@@ -1,0 +1,7 @@
+[build]
+buildCommand = "bun --cwd client install && bun --cwd client run build && bun --cwd server install"
+
+[deploy]
+startCommand = "bun --cwd server run start"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"

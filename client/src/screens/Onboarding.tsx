@@ -207,17 +207,17 @@ export default function Onboarding() {
 
           <Match when={step() === "scan-qr"}>
             <h2 class={styles.heading}>Enter your partner's code</h2>
-            <div class={styles.form}>
+            <div class={unlockStyles.form}>
               <input
                 type="text"
-                class={styles.input}
+                class={unlockStyles.input}
                 placeholder="Paste the code here"
                 value={tokenInput()}
                 onInput={(e) => setTokenInput(e.currentTarget.value)}
                 autofocus
               />
               <Show when={error()}>
-                <p class={styles.error}>{error()}</p>
+                <p class={unlockStyles.error}>{error()}</p>
               </Show>
               <button
                 class="btn-primary"
