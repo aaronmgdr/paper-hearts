@@ -33,17 +33,14 @@ export async function initiate(req: Request): Promise<Response> {
 
   console.log(`[initiate] publicKey=${publicKey.slice(0, 8)}…`);
 
-  // Check if this key is already registered
-  const existing = await sql`SELECT public_key FROM users WHERE public_key = ${publicKey}`;
-  if (existing.length > 0) {
-    console.log(`[initiate] REJECTED: key already registered`);
-    return Response.json({ error: "Public key already registered" }, { status: 409 });
-  }
-
   // Create pair, register user, generate token — all in a transaction
+  // If key already exists (re-pairing), remove the old user record first
   const result = await sql.begin(async (tx) => {
+    // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
+    await tx`DELETE FROM users WHERE public_key = ${publicKey}`;
+    // @ts-expect-error — same
     const [pair] = await tx`INSERT INTO pairs DEFAULT VALUES RETURNING id`;
-
+    // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
       VALUES (${publicKey}, ${pair.id})
@@ -55,6 +52,7 @@ export async function initiate(req: Request): Promise<Response> {
 
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
+    // @ts-expect-error — same
     await tx`
       INSERT INTO relay_tokens (token, initiator_key, pair_id, expires_at)
       VALUES (${token}, ${publicKey}, ${pair.id}, ${expiresAt})
@@ -128,12 +126,16 @@ export async function join(req: Request): Promise<Response> {
   }
 
   // Register follower and consume token in a transaction
+  // Delete any existing user record first (handles re-pairing)
   const result = await sql.begin(async (tx) => {
+    // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
+    await tx`DELETE FROM users WHERE public_key = ${publicKey}`;
+    // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
       VALUES (${publicKey}, ${tokenRow.pair_id})
     `;
-
+    // @ts-expect-error — same
     await tx`
       UPDATE relay_tokens SET consumed = true WHERE token = ${relayToken}
     `;

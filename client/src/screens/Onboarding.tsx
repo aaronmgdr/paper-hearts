@@ -14,6 +14,7 @@ type Step = "start" | "passphrase" | "biometrics" | "show-qr" | "scan-qr" | "lin
 export default function Onboarding() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const relink = !!searchParams.relink;
   const [step, setStep] = createSignal<Step>(searchParams.token ? "passphrase" : "start");
   const [role, setRole] = createSignal<"initiator" | "follower">(searchParams.token ? "follower" : "initiator");
   const [passphrase, setPassphrase] = createSignal("");
@@ -27,7 +28,11 @@ export default function Onboarding() {
 
   function chooseRole(r: "initiator" | "follower") {
     setRole(r);
-    setStep("passphrase");
+    if (relink) {
+      proceedAfterPassphrase();
+    } else {
+      setStep("passphrase");
+    }
   }
 
   async function handlePassphrase() {
@@ -142,8 +147,8 @@ export default function Onboarding() {
       <div class={styles.center}>
         <Switch>
           <Match when={step() === "start"}>
-            <h1 class={styles.heading}>Start your diary</h1>
-            <p class={styles.sub}>Paper Hearts is a private shared diary for two.</p>
+            <h1 class={styles.heading}>{relink ? "Re-add your partner" : "Start your diary"}</h1>
+            <p class={styles.sub}>{relink ? "Link your diary with a new partner code." : "Paper Hearts is a private shared diary for two."}</p>
             <div class={styles.actions}>
               <button class="btn-primary" onClick={() => chooseRole("initiator")}>
                 I'll start — show my code

@@ -88,7 +88,7 @@ export default function Settings() {
         <button class={styles.item} onClick={() => { /* TODO */ }}>
           Change passphrase
         </button>
-        <A href="/onboarding" class={styles.item}>
+        <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner
         </A>
         <div class={styles.item}>
