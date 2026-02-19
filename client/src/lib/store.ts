@@ -18,8 +18,9 @@ const [secretKey, setSecretKey] = createSignal<Uint8Array | null>(null);
 const [sharedSecret, setSharedSecret] = createSignal<Uint8Array | null>(null);
 const [pendingCount, setPendingCount] = createSignal(0);
 const [isOnline, setIsOnline] = createSignal(navigator.onLine);
+const [unlockMethod, setUnlockMethod] = createSignal<"passphrase" | "biometrics" | null>(null);
 
-export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline };
+export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod };
 
 export async function refreshPendingCount(): Promise<void> {
   const items = await peekAll();
@@ -64,6 +65,7 @@ export async function initialize(): Promise<void> {
   if (identity) {
     setPublicKey(crypto.fromBase64(identity.publicKey));
     setIsPaired(!!identity.pairId && !!identity.partnerPublicKey);
+    setUnlockMethod(identity.unlockMethod ?? "passphrase");
   }
   setIsReady(true);
 }
@@ -179,6 +181,29 @@ export async function createIdentity(passphrase: string): Promise<{ publicKeyB64
   setPublicKey(kp.publicKey);
   setSecretKey(kp.secretKey);
   return { publicKeyB64 };
+}
+
+/** Create an identity protected only by biometrics (no user-facing passphrase). */
+export async function createBiometricsOnlyIdentity(): Promise<void> {
+  // Generate a random internal passphrase — the user never sees this
+  const randomBytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(randomBytes);
+  const internalPassphrase = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  await createIdentity(internalPassphrase);
+
+  // Mark identity as biometrics-only
+  const identity = await storage.loadIdentity();
+  if (identity) {
+    identity.unlockMethod = "biometrics";
+    await storage.saveIdentity(identity);
+  }
+  setUnlockMethod("biometrics");
+
+  // Enroll the PRF/biometric credential
+  await enableBiometrics();
 }
 
 export async function initiateHandshake(): Promise<{ relayToken: string; pairId: string }> {
@@ -340,4 +365,37 @@ export async function loadDayEntries(dayId: string): Promise<storage.DayFile | n
 
 export async function loadAllDays(): Promise<string[]> {
   return storage.listDays();
+}
+
+export async function breakupAndForget(): Promise<void> {
+  const pk = publicKey();
+  const sk = secretKey();
+
+  // Best-effort server deletion — don't block on failure
+  if (pk && sk) {
+    relay.deleteAccount(pk, sk).catch(console.error);
+  }
+
+  // Clear all local OPFS data
+  await storage.clearAllLocalData();
+
+  // Drop the IndexedDB outbox
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase("paper-hearts-outbox");
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+  });
+
+  // Clear session storage
+  sessionStorage.clear();
+
+  // Reset all reactive state
+  setPublicKey(null);
+  setSecretKey(null);
+  setSharedSecret(null);
+  setIsPaired(false);
+  setIsReady(false);
+  setPendingCount(0);
+  window.location.assign("/onboarding");
+  window.location.reload();
 }

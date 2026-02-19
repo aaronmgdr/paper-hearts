@@ -1,18 +1,21 @@
-import { createSignal, onMount } from "solid-js";
-import { A } from "@solidjs/router";
+import { createSignal, onMount, Show } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [pushOn, setPushOn] = createSignal(false);
   const [pushLoading, setPushLoading] = createSignal(true);
   const [bioSupported, setBioSupported] = createSignal(false);
   const [bioOn, setBioOn] = createSignal(false);
   const [bioLoading, setBioLoading] = createSignal(true);
   const [devMode, setDevMode] = createSignal(sessionStorage.getItem("devMode") === "1");
+  const [confirmBreakup, setConfirmBreakup] = createSignal(false);
+  const [breakupLoading, setBreakupLoading] = createSignal(false);
 
   onMount(async () => {
     // Check push status
@@ -68,6 +71,12 @@ export default function Settings() {
     setBioLoading(false);
   }
 
+  async function handleBreakup() {
+    setBreakupLoading(true);
+    await breakupAndForget();
+    navigate("/onboarding", { replace: true });
+  }
+
   return (
     <div class="page">
       <header class={styles.header}>
@@ -99,6 +108,29 @@ export default function Settings() {
           <span>Developer mode</span>
           <span class="meta">{devMode() ? "On" : "Off"}</span>
         </button>
+      </div>
+
+      <div class={styles.danger}>
+        <Show
+          when={confirmBreakup()}
+          fallback={
+            <button class={styles.dangerItem} onClick={() => setConfirmBreakup(true)}>
+              Breakup &amp; forget
+            </button>
+          }
+        >
+          <p class={styles.dangerWarning}>
+            This deletes all your diary entries and removes you from the relay. It cannot be undone.
+          </p>
+          <div class={styles.dangerActions}>
+            <button class={styles.dangerConfirm} onClick={handleBreakup} disabled={breakupLoading()}>
+              {breakupLoading() ? "Deleting..." : "Delete everything"}
+            </button>
+            <button class={styles.dangerCancel} onClick={() => setConfirmBreakup(false)}>
+              Cancel
+            </button>
+          </div>
+        </Show>
       </div>
 
       <Nav />

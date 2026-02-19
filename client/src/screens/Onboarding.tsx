@@ -1,10 +1,10 @@
-import { createSignal, Match, Switch, Show, onCleanup, lazy } from "solid-js";
+import { createSignal, Match, Switch, Show, onCleanup, onMount, lazy } from "solid-js";
 import type { QRSVGProps } from "solid-qr-code";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 
 const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
-import { createIdentity, initiateHandshake, joinHandshake, pollForPartner, enableBiometrics } from "../lib/store";
+import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
@@ -23,8 +23,11 @@ export default function Onboarding() {
   const [qrData, setQrData] = createSignal("");
   const [tokenInput, setTokenInput] = createSignal(searchParams.token as string || "");
   const [loading, setLoading] = createSignal(false);
+  const [prfSupported, setPrfSupported] = createSignal(false);
 
-  
+  onMount(async () => {
+    setPrfSupported(await isPrfSupported());
+  });
 
   function chooseRole(r: "initiator" | "follower") {
     setRole(r);
@@ -49,18 +52,23 @@ export default function Onboarding() {
 
     try {
       await createIdentity(passphrase());
-
-      // Check if device supports biometric unlock
-      const prfOk = await isPrfSupported();
-      if (prfOk) {
-        setStep("biometrics");
-      } else {
-        proceedAfterPassphrase();
-      }
+      await proceedAfterPassphrase();
     } catch (e: any) {
       setError(e.message || "Something went wrong.");
+      setLoading(false);
     }
-    setLoading(false);
+  }
+
+  async function handleBiometricsOnly() {
+    setLoading(true);
+    setError("");
+    try {
+      await createBiometricsOnlyIdentity();
+      await proceedAfterPassphrase();
+    } catch (e: any) {
+      setError(e.message || "Biometric setup failed. Try a passphrase instead.");
+      setLoading(false);
+    }
   }
 
   async function proceedAfterPassphrase() {
@@ -82,17 +90,6 @@ export default function Onboarding() {
     } else {
       setStep("scan-qr");
     }
-  }
-
-  async function handleEnableBiometrics() {
-    setLoading(true);
-    setError("");
-    try {
-      await enableBiometrics();
-    } catch (e: any) {
-      console.error("Biometric setup failed:", e);
-    }
-    await proceedAfterPassphrase();
   }
 
   async function handleJoin() {
@@ -160,8 +157,16 @@ export default function Onboarding() {
           </Match>
 
           <Match when={step() === "passphrase"}>
-            <h2 class={styles.heading}>Choose a passphrase</h2>
-            <p class={styles.sub}>This protects your diary on this device.</p>
+            <h2 class={styles.heading}>Protect your diary</h2>
+            <p class={styles.sub}>Choose how you'll unlock your diary on this device.</p>
+            <Show when={prfSupported()}>
+              <div class={styles.actions}>
+                <button class="btn-primary" onClick={handleBiometricsOnly} disabled={loading()}>
+                  {loading() ? "Setting up..." : "Use biometrics"}
+                </button>
+              </div>
+              <p class={styles.orDivider}>or set a passphrase</p>
+            </Show>
             <div class={unlockStyles.form}>
               <input
                 type="password"
@@ -169,7 +174,6 @@ export default function Onboarding() {
                 placeholder="Passphrase (8+ characters)"
                 value={passphrase()}
                 onInput={(e) => setPassphrase(e.currentTarget.value)}
-                autofocus
               />
               <input
                 type="password"
@@ -182,29 +186,13 @@ export default function Onboarding() {
                 <p class={unlockStyles.error}>{error()}</p>
               </Show>
               <button
-                class="btn-primary"
+                class="btn-secondary"
                 onClick={handlePassphrase}
                 disabled={loading()}
               >
-                {loading() ? "Setting up..." : "Continue"}
+                {loading() ? "Setting up..." : "Use passphrase"}
               </button>
             </div>
-          </Match>
-
-          <Match when={step() === "biometrics"}>
-            <h2 class={styles.heading}>Enable biometric unlock?</h2>
-            <p class={styles.sub}>Use Face ID or Touch ID to unlock your diary.</p>
-            <div class={styles.actions}>
-              <button class="btn-primary" onClick={handleEnableBiometrics} disabled={loading()}>
-                {loading() ? "Setting up..." : "Enable biometrics"}
-              </button>
-              <button class="btn-secondary" onClick={() => proceedAfterPassphrase()} disabled={loading()}>
-                Skip
-              </button>
-            </div>
-            <Show when={error()}>
-              <p class={unlockStyles.error}>{error()}</p>
-            </Show>
           </Match>
 
           <Match when={step() === "show-qr"}>

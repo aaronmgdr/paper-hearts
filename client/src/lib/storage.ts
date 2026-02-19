@@ -50,6 +50,7 @@ export interface StoredIdentity {
     nonce: string;        // base64
     ciphertext: string;   // base64
   };
+  unlockMethod?: "passphrase" | "biometrics"; // undefined = passphrase (legacy)
   pairId: string | null;
   partnerPublicKey: string | null;
 }
@@ -89,6 +90,14 @@ export async function loadDay(dayId: string): Promise<DayFile | null> {
   const data = await readFile(dir, `${dayId}.json`);
   if (!data) return null;
   return JSON.parse(data);
+}
+
+/** Delete all OPFS data — identity and all entries. */
+export async function clearAllLocalData(): Promise<void> {
+  const root = await getRoot();
+  for (const dir of ["identity", "entries"]) {
+    try { await root.removeEntry(dir, { recursive: true }); } catch { /* already gone */ }
+  }
 }
 
 /** List all dayIds that have stored entries, sorted descending. */

@@ -104,6 +104,16 @@ export async function ackEntries(
   return { status: res.status, data: await res.json() };
 }
 
+export async function deleteAccount(
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/account`;
+  const headers = await signedHeaders("DELETE", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "DELETE", headers });
+  return res.status;
+}
+
 export async function subscribePush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   publicKey: Uint8Array,

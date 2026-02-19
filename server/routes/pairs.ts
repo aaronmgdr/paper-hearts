@@ -151,6 +151,31 @@ export async function join(req: Request): Promise<Response> {
 }
 
 /**
+ * DELETE /api/account
+ * Authenticated. Deletes all server-side data for the requesting user.
+ */
+export async function deleteAccount(req: Request, path: string): Promise<Response> {
+  let auth;
+  try {
+    auth = await verifyRequest(req, path, null);
+  } catch (e) {
+    if (e instanceof AuthError) {
+      return Response.json({ error: e.message }, { status: e.status });
+    }
+    throw e;
+  }
+
+  console.log(`[deleteAccount] user=${auth.publicKey.slice(0, 8)}…`);
+
+  // Delete entries first (FK constraint on author_key → users.public_key)
+  await sql`DELETE FROM entries WHERE author_key = ${auth.publicKey}`;
+  await sql`DELETE FROM users WHERE public_key = ${auth.publicKey}`;
+
+  console.log(`[deleteAccount] OK`);
+  return new Response(null, { status: 204 });
+}
+
+/**
  * GET /api/pairs/status
  * Authenticated. Returns partner's public key if one has joined.
  * Used by the initiator to poll for follower completion.
