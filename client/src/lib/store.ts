@@ -154,6 +154,31 @@ export async function enableBiometrics(): Promise<void> {
   await storage.saveIdentity(identity);
 }
 
+/** Change the passphrase. Returns false if the current passphrase is wrong. */
+export async function changePassphrase(currentPassphrase: string, newPassphrase: string): Promise<boolean> {
+  const identity = await storage.loadIdentity();
+  if (!identity) return false;
+
+  const crypto = await loadCrypto();
+
+  // Verify the current passphrase
+  try {
+    const encKey = identityToEncryptedKey(identity, crypto);
+    crypto.decryptSecretKey(encKey, currentPassphrase);
+  } catch {
+    return false;
+  }
+
+  // Re-encrypt with the new passphrase
+  const sk = secretKey();
+  if (!sk) return false;
+
+  const newEncKey = crypto.encryptSecretKey(sk, newPassphrase);
+  identity.encryptedKey = encryptedKeyToStorable(newEncKey, crypto);
+  await storage.saveIdentity(identity);
+  return true;
+}
+
 /** Disable biometric unlock. */
 export async function disableBiometrics(): Promise<void> {
   const identity = await storage.loadIdentity();

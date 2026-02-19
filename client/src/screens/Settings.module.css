@@ -36,6 +36,46 @@
   border-radius: var(--radius-sm);
 }
 
+.passphraseForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-3);
+  border-bottom: 1px solid var(--veiled);
+}
+
+.passphraseInput {
+  width: 100%;
+  padding: var(--space-2) var(--space-2);
+  border: 1px solid var(--veiled);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  background: transparent;
+  color: var(--ink);
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.passphraseInput:focus {
+  outline: none;
+  border-color: var(--blush);
+}
+
+.changeError {
+  font-size: 14px;
+  color: var(--soft-red);
+  margin: 0;
+}
+
+.changeSuccess {
+  font-size: 15px;
+  color: var(--dusty-mauve);
+  margin: 0;
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
 .danger {
   margin-top: var(--space-5);
   padding-bottom: calc(56px + var(--space-3));

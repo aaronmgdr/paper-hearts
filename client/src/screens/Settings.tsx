@@ -1,9 +1,9 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, Match, onMount, Show, Switch } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, unlockMethod } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
@@ -16,6 +16,15 @@ export default function Settings() {
   const [devMode, setDevMode] = createSignal(sessionStorage.getItem("devMode") === "1");
   const [confirmBreakup, setConfirmBreakup] = createSignal(false);
   const [breakupLoading, setBreakupLoading] = createSignal(false);
+
+  // Change passphrase
+  const [showChangePassphrase, setShowChangePassphrase] = createSignal(false);
+  const [currentPass, setCurrentPass] = createSignal("");
+  const [newPass, setNewPass] = createSignal("");
+  const [confirmPass, setConfirmPass] = createSignal("");
+  const [changeLoading, setChangeLoading] = createSignal(false);
+  const [changeError, setChangeError] = createSignal("");
+  const [changeDone, setChangeDone] = createSignal(false);
 
   onMount(async () => {
     // Check push status
@@ -77,6 +86,36 @@ export default function Settings() {
     navigate("/onboarding", { replace: true });
   }
 
+  function openChangePassphrase() {
+    setCurrentPass("");
+    setNewPass("");
+    setConfirmPass("");
+    setChangeError("");
+    setChangeDone(false);
+    setShowChangePassphrase(true);
+  }
+
+  async function handleChangePassphrase() {
+    if (newPass().length < 4) {
+      setChangeError("At least 4 characters.");
+      return;
+    }
+    if (newPass() !== confirmPass()) {
+      setChangeError("Passphrases don't match.");
+      return;
+    }
+    setChangeLoading(true);
+    setChangeError("");
+    const ok = await changePassphrase(currentPass(), newPass());
+    setChangeLoading(false);
+    if (!ok) {
+      setChangeError("Current passphrase is wrong.");
+    } else {
+      setChangeDone(true);
+      setTimeout(() => setShowChangePassphrase(false), 1200);
+    }
+  }
+
   return (
     <div class="page">
       <header class={styles.header}>
@@ -94,9 +133,62 @@ export default function Settings() {
             <span class="meta">{bioLoading() ? "..." : bioOn() ? "On" : "Off"}</span>
           </button>
         )}
-        <button class={styles.item} onClick={() => { /* TODO */ }}>
-          Change passphrase
-        </button>
+        <Show when={unlockMethod() !== "biometrics"}>
+          <Show
+            when={showChangePassphrase()}
+            fallback={
+              <button class={styles.item} onClick={openChangePassphrase}>
+                Change passphrase
+              </button>
+            }
+          >
+            <div class={styles.passphraseForm}>
+              <Show when={changeDone()}>
+                <p class={styles.changeSuccess}>Passphrase updated.</p>
+              </Show>
+              <Show when={!changeDone()}>
+                <input
+                  type="password"
+                  class={styles.passphraseInput}
+                  placeholder="Current passphrase"
+                  value={currentPass()}
+                  onInput={(e) => setCurrentPass(e.currentTarget.value)}
+                  autofocus
+                />
+                <input
+                  type="password"
+                  class={styles.passphraseInput}
+                  placeholder="New passphrase"
+                  value={newPass()}
+                  onInput={(e) => setNewPass(e.currentTarget.value)}
+                />
+                <input
+                  type="password"
+                  class={styles.passphraseInput}
+                  placeholder="Confirm new passphrase"
+                  value={confirmPass()}
+                  onInput={(e) => setConfirmPass(e.currentTarget.value)}
+                />
+                <Show when={changeError()}>
+                  <p class={styles.changeError}>{changeError()}</p>
+                </Show>
+                <div class={styles.dangerActions}>
+                  <button
+                    class={styles.dangerConfirm}
+                    style={{ background: "var(--blush)" }}
+                    onClick={handleChangePassphrase}
+                    disabled={changeLoading() || !currentPass() || !newPass() || !confirmPass()}
+                  >
+                    {changeLoading() ? "Saving..." : "Save"}
+                  </button>
+                  <button class={styles.dangerCancel} onClick={() => setShowChangePassphrase(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </Show>
+            </div>
+          </Show>
+        </Show>
         <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner
         </A>
@@ -111,15 +203,14 @@ export default function Settings() {
       </div>
 
       <div class={styles.danger}>
-        <Show
-          when={confirmBreakup()}
-          fallback={
+        <Switch>
+          <Match when={devMode() && !confirmBreakup()}>
             <button class={styles.dangerItem} onClick={() => setConfirmBreakup(true)}>
-              Breakup &amp; forget
+              Breakup &amp; Forget
             </button>
-          }
-        >
-          <p class={styles.dangerWarning}>
+          </Match>
+          <Match when={devMode() && confirmBreakup()}> 
+             <p class={styles.dangerWarning}>
             This deletes all your diary entries and removes you from the relay. It cannot be undone.
           </p>
           <div class={styles.dangerActions}>
@@ -130,9 +221,9 @@ export default function Settings() {
               Cancel
             </button>
           </div>
-        </Show>
+          </Match>
+        </Switch>
       </div>
-
       <Nav />
     </div>
   );
