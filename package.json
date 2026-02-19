@@ -3,11 +3,12 @@
   "private": true,
   "workspaces": ["client", "server"],
   "scripts": {
-    "dev:client": "cd client && bun run dev",
-    "dev:server": "cd server && bun run dev",
-    "build": "cd client && bun run build",
-    "start": "cd server && bun run start",
-    "migrate": "cd server && bun run migrate"
+    "dev:client": "bun run --cwd client dev",
+    "dev": "bun run dev:client & bun run start",
+    "build": "bun run --cwd client build",
+    "start": "bun run  --cwd server start",
+    "deploy": "bun run start",
+    "migrate": "bun run --cwd server migrate"
   },
   "dependencies": {}
 }

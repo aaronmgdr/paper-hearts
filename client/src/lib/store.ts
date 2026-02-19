@@ -54,8 +54,8 @@ export async function initialize(): Promise<void> {
 
 export async function unlock(passphrase: string): Promise<boolean> {
   const identity = await storage.loadIdentity();
-  if (!identity) return false;
-
+  if (!identity) return false; 
+  
   try {
     const crypto = await loadCrypto();
     const encKey = identityToEncryptedKey(identity, crypto);
