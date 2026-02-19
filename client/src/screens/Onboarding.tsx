@@ -6,6 +6,7 @@ const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.Q
 
 import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
+import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
@@ -145,6 +146,9 @@ export default function Onboarding() {
 
   return (
     <div class="page">
+      <Show when={relink && step() === "start"}>
+        <BackButton href="/settings" />
+      </Show>
       <div class={styles.center}>
         <Switch>
           <Match when={step() === "start"}>

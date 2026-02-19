@@ -127,7 +127,7 @@ export default function Settings() {
           <span>Notifications</span>
           <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
         </button>
-        {bioSupported() && (
+        {bioSupported() && unlockMethod() !== "biometrics" && (
           <button class={styles.item} onClick={toggleBiometrics} disabled={bioLoading()}>
             <span>Biometrics</span>
             <span class="meta">{bioLoading() ? "..." : bioOn() ? "On" : "Off"}</span>
@@ -210,10 +210,10 @@ export default function Settings() {
             </button>
           </Match>
           <Match when={devMode() && confirmBreakup()}> 
-             <p class={styles.dangerWarning}>
-            This deletes all your diary entries and removes you from the relay. It cannot be undone.
-          </p>
-          <div class={styles.dangerActions}>
+            <p class={styles.dangerWarning}>
+              This deletes all your diary entries and removes you from the relay. It cannot be undone.
+            </p>
+            <div class={styles.dangerActions}>
             <button class={styles.dangerConfirm} onClick={handleBreakup} disabled={breakupLoading()}>
               {breakupLoading() ? "Deleting..." : "Delete everything"}
             </button>
