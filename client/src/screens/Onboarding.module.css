@@ -28,6 +28,13 @@
   margin-top: var(--space-2);
 }
 
+.orDivider {
+  color: var(--dusty-mauve);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  margin: var(--space-1) 0 0;
+}
+
 .qrFrame {
   padding: 1rem;
   border: 3px solid var(--blush);

@@ -9,7 +9,19 @@ import { isPrfSupported } from "../lib/webauthn";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
-type Step = "start" | "passphrase" | "biometrics" | "show-qr" | "scan-qr" | "linked";
+type Step = "start" | "passphrase" | "show-qr" | "scan-qr" | "linked";
+
+
+  const qrCode: QRSVGProps = {
+    value: "", // this is replaced dynamically, but we need to set it to something to avoid type errors
+    level: "medium",
+    backgroundColor: "transparent",
+    backgroundAlpha: 1,
+    foregroundColor: "black",
+    foregroundAlpha: 1,
+    width: 256,
+    height: 256,
+  };
 
 export default function Onboarding() {
   const [searchParams] = useSearchParams();
@@ -88,6 +100,7 @@ export default function Onboarding() {
         setLoading(false);
       }
     } else {
+      setLoading(false);
       setStep("scan-qr");
     }
   }
@@ -128,16 +141,7 @@ export default function Onboarding() {
     if (pollTimer) clearInterval(pollTimer);
   });
 
-  const qrCode: QRSVGProps = {
-    value: qrData(),
-    level: "low",
-    backgroundColor: "transparent",
-    backgroundAlpha: 1,
-    foregroundColor: "black",
-    foregroundAlpha: 1,
-    width: 256,
-    height: 256,
-  };
+
 
   return (
     <div class="page">
@@ -199,7 +203,7 @@ export default function Onboarding() {
             <h2 class={styles.heading}>Show this to your person</h2>
             <div class={styles.qrFrame}>
               <div class={styles.tokenDisplay}>
-                <QRCodeSVG {...qrCode} />
+                <QRCodeSVG {...qrCode} value={qrData()} />
               </div>
             </div>
             <span class="label" style={{ "text-align": "center" }}>{qrData()}</span>

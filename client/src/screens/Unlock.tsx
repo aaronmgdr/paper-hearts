@@ -1,5 +1,5 @@
 import { createSignal, onMount, Show } from "solid-js";
-import { unlock, unlockWithPrf, hasPrfCredential } from "../lib/store";
+import { unlock, unlockWithPrf, hasPrfCredential, unlockMethod } from "../lib/store";
 import styles from "./Unlock.module.css";
 
 export default function UnlockScreen(props: { onUnlocked: () => void }) {
@@ -65,12 +65,14 @@ export default function UnlockScreen(props: { onUnlocked: () => void }) {
             >
               {loading() ? "Unlocking..." : "Unlock with biometrics"}
             </button>
-            <button
-              class="btn-link"
-              onClick={() => setShowPassphrase(true)}
-            >
-              Use passphrase instead
-            </button>
+            <Show when={unlockMethod() !== "biometrics"}>
+              <button
+                class="btn-link"
+                onClick={() => setShowPassphrase(true)}
+              >
+                Use passphrase instead
+              </button>
+            </Show>
             {error() && <p class={styles.error}>{error()}</p>}
           </div>
         </Show>
