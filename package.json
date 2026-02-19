@@ -10,5 +10,8 @@
     "deploy": "bun run start",
     "migrate": "bun run --cwd server migrate"
   },
-  "dependencies": {}
+  "dependencies": {
+    "build": "^0.1.4",
+    "run": "^1.5.0"
+  }
 }

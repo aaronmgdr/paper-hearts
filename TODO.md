@@ -5,6 +5,8 @@
 * [ ] add UI tests
 * [x] ui fixes on the on boarding (form sizes )
 * [x] add touch id / face id instead of pin (if possible)
-* [ ] 
+* [ ] deploy
+* [ ] ADD README
+* [ ] name partner
 
 

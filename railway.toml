@@ -1,5 +1,5 @@
 [build]
-buildCommand = "bun --cwd client install && bun --cwd client run build && bun --cwd server install"
+buildCommand = "bun install && bun run build && bun run migrate"
 
 [deploy]
 startCommand = "bun run deploy"
