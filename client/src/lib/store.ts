@@ -90,7 +90,8 @@ export async function unlock(passphrase: string): Promise<boolean> {
       );
     }
     return true;
-  } catch {
+  } catch (e) {
+    console.error("[unlock]", e);
     return false;
   }
 }
@@ -128,7 +129,8 @@ export async function unlockWithPrf(): Promise<boolean> {
       );
     }
     return true;
-  } catch {
+  } catch (e) {
+    console.error("[unlockWithPrf]", e);
     return false;
   }
 }
@@ -140,9 +142,10 @@ export async function enableBiometrics(): Promise<void> {
   if (!sk || !pk) throw new Error("Not unlocked");
 
   const crypto = await loadCrypto();
+  console.info("[enableBiometrics] registering PRF credential");
   const { credentialId, prfKey } = await registerPrfCredential(pk);
   const encrypted = crypto.encryptSecretKeyRaw(sk, prfKey);
-
+  console.info("[enableBiometrics] PRF credential registered, updating identity");
   const identity = await storage.loadIdentity();
   if (!identity) throw new Error("No identity");
 
@@ -165,7 +168,8 @@ export async function changePassphrase(currentPassphrase: string, newPassphrase:
   try {
     const encKey = identityToEncryptedKey(identity, crypto);
     crypto.decryptSecretKey(encKey, currentPassphrase);
-  } catch {
+  } catch (e) {
+    console.error("[changePassphrase] current passphrase verification failed:", e);
     return false;
   }
 
@@ -217,10 +221,11 @@ export async function createBiometricsOnlyIdentity(): Promise<void> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  await createIdentity(internalPassphrase);
-
+  const { publicKeyB64 } = await createIdentity(internalPassphrase);
+  console.log("[createBiometricsOnlyIdentity] created identity with publicKey:", publicKeyB64.slice(0, 8), "…");
   // Mark identity as biometrics-only
   const identity = await storage.loadIdentity();
+  console.log("[createBiometricsOnlyIdentity] loaded identity for update:", !!identity);
   if (identity) {
     identity.unlockMethod = "biometrics";
     await storage.saveIdentity(identity);
@@ -375,7 +380,7 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
 
       idsToAck.push(entry.id);
     } catch (e) {
-      console.error("Failed to decrypt entry:", e);
+      console.error("[fetchAndDecryptEntries] failed to decrypt entry:", e);
     }
   }
 
@@ -390,6 +395,78 @@ export async function loadDayEntries(dayId: string): Promise<storage.DayFile | n
 
 export async function loadAllDays(): Promise<string[]> {
   return storage.listDays();
+}
+
+// ── History bundle transfer ──────────────────────────────────
+
+/** Initiator: encrypt all local entries and upload to relay for follower to collect. */
+export async function uploadHistoryBundle(): Promise<void> {
+  const pk = publicKey();
+  const sk = secretKey();
+  const ss = sharedSecret();
+  if (!pk || !sk || !ss) return;
+
+  const days = await storage.listDays();
+  if (days.length === 0) return;
+
+  const bundle: Array<{ dayId: string; entries: storage.StoredEntry[] }> = [];
+  for (const dayId of days) {
+    const day = await storage.loadDay(dayId);
+    if (day && day.entries.length > 0) {
+      bundle.push({ dayId, entries: day.entries });
+    }
+  }
+  if (bundle.length === 0) return;
+
+  const crypto = await loadCrypto();
+  const encrypted = crypto.encrypt(JSON.stringify(bundle), ss);
+  await relay.uploadTransfer(crypto.toBase64(encrypted), pk, sk);
+  console.log("[transfer] uploaded history bundle:", bundle.length, "days");
+}
+
+/** Follower: poll relay for history bundle, decrypt and import. */
+export async function downloadHistoryBundle(): Promise<void> {
+  const pk = publicKey();
+  const sk = secretKey();
+  const ss = sharedSecret();
+  if (!pk || !sk || !ss) return;
+
+  const MAX_ATTEMPTS = 15;
+  const POLL_INTERVAL_MS = 2000;
+
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const { payload } = await relay.downloadTransfer(pk, sk);
+    if (payload) {
+      const crypto = await loadCrypto();
+      const encrypted = crypto.fromBase64(payload);
+      const plainJson = crypto.decrypt(encrypted, ss);
+      const bundle = JSON.parse(plainJson) as Array<{ dayId: string; entries: storage.StoredEntry[] }>;
+
+      for (const { dayId, entries } of bundle) {
+        // Flip author perspective: initiator's "me" entries are our "partner" entries
+        const flipped = entries.map((e) => ({
+          ...e,
+          author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
+        }));
+        const existing = (await storage.loadDay(dayId)) || { entries: [] };
+        // Merge: add flipped entries not already present by author+timestamp
+        for (const entry of flipped) {
+          const dupe = existing.entries.some(
+            (e) => e.author === entry.author && e.timestamp === entry.timestamp
+          );
+          if (!dupe) existing.entries.push(entry);
+        }
+        await storage.saveDay(dayId, existing);
+      }
+      console.log("[transfer] imported history bundle:", bundle.length, "days");
+      return;
+    }
+
+    if (i < MAX_ATTEMPTS - 1) {
+      await new Promise((res) => setTimeout(res, POLL_INTERVAL_MS));
+    }
+  }
+  console.log("[transfer] no history bundle received after", MAX_ATTEMPTS, "attempts");
 }
 
 export async function breakupAndForget(): Promise<void> {

@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 
 const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
-import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, pollForPartner } from "../lib/store";
+import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, pollForPartner, uploadHistoryBundle, downloadHistoryBundle } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
@@ -37,6 +37,7 @@ export default function Onboarding() {
   const [tokenInput, setTokenInput] = createSignal(searchParams.token as string || "");
   const [loading, setLoading] = createSignal(false);
   const [prfSupported, setPrfSupported] = createSignal(false);
+  const [copied, setCopied] = createSignal(false);
 
   onMount(async () => {
     setPrfSupported(await isPrfSupported());
@@ -115,6 +116,7 @@ export default function Onboarding() {
     try {
       await joinHandshake(token);
       setStep("linked");
+      downloadHistoryBundle().catch(console.error);
       setTimeout(() => navigate("/", { replace: true }), 1500);
     } catch (e: any) {
       setError(e.message || "Invalid code.");
@@ -133,6 +135,7 @@ export default function Onboarding() {
       if (partner) {
         clearInterval(pollTimer);
         setStep("linked");
+        uploadHistoryBundle().catch(console.error);
         setTimeout(() => navigate("/", { replace: true }), 1500);
       }
     }, 3000);
@@ -153,14 +156,23 @@ export default function Onboarding() {
         <Switch>
           <Match when={step() === "start"}>
             <h1 class={styles.heading}>{relink ? "Re-add your partner" : "Start your diary"}</h1>
-            <p class={styles.sub}>{relink ? "Link your diary with a new partner code." : "Paper Hearts is a private shared diary for two."}</p>
+            <p class={styles.sub}>{relink ? "Generate a code for your partner to scan on their new device." : "Paper Hearts is a private shared diary for two."}</p>
             <div class={styles.actions}>
-              <button class="btn-primary" onClick={() => chooseRole("initiator")}>
-                I'll start — show my code
-              </button>
-              <button class="btn-secondary" onClick={() => chooseRole("follower")}>
-                I have a code to scan
-              </button>
+              <Show
+                when={relink}
+                fallback={<>
+                  <button class="btn-primary" onClick={() => chooseRole("initiator")}>
+                    I'll start — show my code
+                  </button>
+                  <button class="btn-secondary" onClick={() => chooseRole("follower")}>
+                    I have a code to scan
+                  </button>
+                </>}
+              >
+                <button class="btn-primary" onClick={() => chooseRole("initiator")} disabled={loading()}>
+                  {loading() ? "Generating..." : "Generate code"}
+                </button>
+              </Show>
             </div>
           </Match>
 
@@ -204,15 +216,27 @@ export default function Onboarding() {
           </Match>
 
           <Match when={step() === "show-qr"}>
-            <h2 class={styles.heading}>Show this to your person</h2>
+            <h2 class={styles.heading}>{relink ? "Share with your partner's new device" : "Show this to your person"}</h2>
             <div class={styles.qrFrame}>
-              <div class={styles.tokenDisplay}>
-                <QRCodeSVG {...qrCode} value={qrData()} />
-              </div>
+              <QRCodeSVG {...qrCode} value={qrData()} />
             </div>
-            <span class="label" style={{ "text-align": "center" }}>{qrData()}</span>
-            <p class="label" style={{ "text-align": "center" }}>
-              Share this code with your partner. It expires in 10 minutes.
+            <button
+              class="btn-primary"
+              onClick={async () => {
+                if (navigator.share) {
+                  await navigator.share({ url: qrData() }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(qrData());
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }
+              }}
+            >
+              {copied() ? "Copied!" : "Share link"}
+            </button>
+           
+            <p class={styles.qrWarning}>
+              Only share this with your partner. Anyone who scans it can replace your connection.
             </p>
           </Match>
 

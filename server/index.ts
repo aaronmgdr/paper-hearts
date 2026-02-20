@@ -2,6 +2,7 @@ import { join } from "path";
 import { initiate, join as joinPair, pairStatus, deleteAccount } from "./routes/pairs";
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
 import { subscribePush } from "./routes/push";
+import { uploadTransfer, downloadTransfer } from "./routes/transfer";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const CLIENT_DIST = join(import.meta.dir, "../client/dist");
@@ -96,6 +97,14 @@ async function handleApi(req: Request, path: string): Promise<Response> {
   // Account deletion
   if (path === "/api/account" && req.method === "DELETE") {
     return deleteAccount(req, path);
+  }
+
+  // History transfer (post-pairing device sync)
+  if (path === "/api/transfer" && req.method === "POST") {
+    return uploadTransfer(req, path);
+  }
+  if (path === "/api/transfer" && req.method === "GET") {
+    return downloadTransfer(req, path);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

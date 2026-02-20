@@ -114,6 +114,28 @@ export async function deleteAccount(
   return res.status;
 }
 
+export async function uploadTransfer(
+  payloadB64: string,
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/transfer`;
+  const body = JSON.stringify({ payload: payloadB64 });
+  const headers = await signedHeaders("POST", path, body, publicKey, secretKey);
+  const res = await fetch(path, { method: "POST", headers, body });
+  return res.status;
+}
+
+export async function downloadTransfer(
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+): Promise<{ payload: string | null }> {
+  const path = `${BASE}/transfer`;
+  const headers = await signedHeaders("GET", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "GET", headers });
+  return res.json();
+}
+
 export async function subscribePush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   publicKey: Uint8Array,
