@@ -192,10 +192,10 @@ export default function Settings() {
         <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner
         </A>
-        <div class={styles.item}>
-          <span>About Paper Hearts</span>
+        <A href="/privacy" class={styles.item}>
+          <span>Paper Hearts Privacy</span>
           <span class="meta">v1.0.0-{__GIT_HASH__}</span>
-        </div>
+        </A>
         <button class={styles.item} onClick={toggleDevMode}>
           <span>Developer mode</span>
           <span class="meta">{devMode() ? "On" : "Off"}</span>

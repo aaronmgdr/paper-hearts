@@ -6,6 +6,7 @@ import Today from "./screens/Today";
 import Archive from "./screens/Archive";
 import Settings from "./screens/Settings";
 import Onboarding from "./screens/Onboarding";
+import Privacy from "./screens/Privacy";
 import "./styles/global.css";
 
 render(
@@ -17,6 +18,7 @@ render(
       <Route path="/archive/:dayId" component={Today} />
       <Route path="/settings" component={Settings} />
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/privacy" component={Privacy} />
     </Router>
   ),
   document.getElementById("root")!
