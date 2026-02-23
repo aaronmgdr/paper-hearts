@@ -1,6 +1,15 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { VitePWA } from "vite-plugin-pwa";
+import { execSync } from "child_process";
+
+const gitHash = (() => {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "unknown";
+  }
+})();
 
 export default defineConfig({
   plugins: [
@@ -30,6 +39,9 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    __GIT_HASH__: JSON.stringify(gitHash),
+  },
   server: {
     proxy: {
       "/api": "http://localhost:3000",

@@ -194,7 +194,7 @@ export default function Settings() {
         </A>
         <div class={styles.item}>
           <span>About Paper Hearts</span>
-          <span class="meta">v1.0.0</span>
+          <span class="meta">v1.0.0-{__GIT_HASH__}</span>
         </div>
         <button class={styles.item} onClick={toggleDevMode}>
           <span>Developer mode</span>
