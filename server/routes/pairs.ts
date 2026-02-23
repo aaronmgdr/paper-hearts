@@ -1,6 +1,7 @@
 import sodium from "libsodium-wrappers-sumo";
 import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
+import { notifyPaired } from "../pairing";
 
 await sodium.ready;
 
@@ -37,13 +38,16 @@ export async function initiate(req: Request): Promise<Response> {
   // If key already exists (re-pairing), remove the old user record first
   const result = await sql.begin(async (tx) => {
     // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
-    await tx`DELETE FROM users WHERE public_key = ${publicKey}`;
-    // @ts-expect-error — same
     const [pair] = await tx`INSERT INTO pairs DEFAULT VALUES RETURNING id`;
     // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
       VALUES (${publicKey}, ${pair.id})
+      ON CONFLICT (public_key) DO UPDATE
+        SET pair_id = EXCLUDED.pair_id,
+            push_endpoint = NULL,
+            push_p256dh = NULL,
+            push_auth = NULL
     `;
 
     // Generate cryptographically random relay token
@@ -129,11 +133,14 @@ export async function join(req: Request): Promise<Response> {
   // Delete any existing user record first (handles re-pairing)
   const result = await sql.begin(async (tx) => {
     // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
-    await tx`DELETE FROM users WHERE public_key = ${publicKey}`;
-    // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
       VALUES (${publicKey}, ${tokenRow.pair_id})
+      ON CONFLICT (public_key) DO UPDATE
+        SET pair_id = EXCLUDED.pair_id,
+            push_endpoint = NULL,
+            push_p256dh = NULL,
+            push_auth = NULL
     `;
     // @ts-expect-error — same
     await tx`
@@ -147,6 +154,10 @@ export async function join(req: Request): Promise<Response> {
   });
 
   console.log(`[join] OK pairId=${result.pairId} partnerKey=${result.partnerPublicKey.slice(0, 8)}…`);
+
+  // Notify initiator's waiting WebSocket if connected
+  notifyPaired(result.pairId, result.partnerPublicKey);
+
   return Response.json(result, { status: 200 });
 }
 

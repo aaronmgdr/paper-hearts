@@ -136,6 +136,45 @@ export async function downloadTransfer(
   return res.json();
 }
 
+/**
+ * Open a WebSocket to wait for partner to join. Returns a cleanup function.
+ * Signed payload: "WATCH\n{publicKeyB64}\n{timestamp}"
+ */
+export function watchForPartner(
+  publicKey: Uint8Array,
+  secretKey: Uint8Array,
+  onPaired: (partnerPublicKey: string) => void,
+  onError: (err: Error) => void
+): () => void {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${window.location.host}/api/pairs/watch`);
+  console.info('watch partner')
+  ws.onopen = async () => {
+    const { sign, toBase64 } = await loadCrypto();
+    const pkB64 = toBase64(publicKey);
+    const timestamp = new Date().toISOString();
+    const payload = `WATCH\n${pkB64}\n${timestamp}`;
+    const signature = sign(new TextEncoder().encode(payload), secretKey);
+    ws.send(JSON.stringify({ type: "auth", publicKey: pkB64, timestamp, signature: toBase64(signature) }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      console.log('onMessage')
+      const msg = JSON.parse(event.data as string);
+      if (msg.type === "paired") onPaired(msg.partnerPublicKey);
+      else if (msg.type === "error") onError(new Error(msg.message));
+    } catch (e) {
+      console.error("[watchForPartner] bad message:", e);
+    }
+  };
+
+  ws.onerror = () => onError(new Error("WebSocket connection failed"));
+  ws.onclose = (e) => { if (!e.wasClean) onError(new Error("WebSocket closed unexpectedly")); };
+
+  return () => ws.close();
+}
+
 export async function subscribePush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   publicKey: Uint8Array,

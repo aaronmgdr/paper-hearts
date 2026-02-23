@@ -87,3 +87,12 @@
   60% { transform: scale(1.15); }
   100% { transform: scale(1); opacity: 1; }
 }
+
+code {
+    font-size: 0.8rem;
+    margin: 0;
+    padding: 3px;
+    background-color: white;
+    border-radius: 8px;
+    border: 1px solid var(--blush);
+}

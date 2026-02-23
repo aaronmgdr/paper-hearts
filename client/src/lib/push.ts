@@ -20,6 +20,18 @@ export async function isPushEnabled(): Promise<boolean> {
   return sub !== null;
 }
 
+/** Fire a local test notification via the service worker. */
+export async function sendTestNotification(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  const reg = await navigator.serviceWorker.ready;
+  await reg.showNotification("Paper Hearts", {
+    body: "Your partner wrote today",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    tag: "test-notification",
+  });
+}
+
 /** Unsubscribe from push notifications. */
 export async function unregisterPush(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;

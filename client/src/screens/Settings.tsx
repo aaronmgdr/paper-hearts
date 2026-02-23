@@ -1,7 +1,7 @@
 import { createSignal, Match, onMount, Show, Switch } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
-import { isPushEnabled, registerPush, unregisterPush } from "../lib/push";
+import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
 import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, unlockMethod } from "../lib/store";
 import styles from "./Settings.module.css";
@@ -200,6 +200,11 @@ export default function Settings() {
           <span>Developer mode</span>
           <span class="meta">{devMode() ? "On" : "Off"}</span>
         </button>
+        <Show when={devMode()}>
+          <button class={styles.item} onClick={sendTestNotification}>
+            Send test notification
+          </button>
+        </Show>
       </div>
 
       <div class={styles.danger}>

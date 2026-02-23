@@ -4,14 +4,14 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 
 const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
-import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, pollForPartner, uploadHistoryBundle, downloadHistoryBundle } from "../lib/store";
+import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, startWatchingForPartner, unlock, unlockWithPrf, unlockMethod } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
+import { registerPush } from "../lib/push";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
-type Step = "start" | "passphrase" | "show-qr" | "scan-qr" | "linked";
-
+type Step = "start" | "passphrase" | "relink-auth" | "show-qr" | "scan-qr" | "linked";
 
   const qrCode: QRSVGProps = {
     value: "", // this is replaced dynamically, but we need to set it to something to avoid type errors
@@ -32,6 +32,7 @@ export default function Onboarding() {
   const [role, setRole] = createSignal<"initiator" | "follower">(searchParams.token ? "follower" : "initiator");
   const [passphrase, setPassphrase] = createSignal("");
   const [confirm, setConfirm] = createSignal("");
+  const [relinkPassphrase, setRelinkPassphrase] = createSignal("");
   const [error, setError] = createSignal("");
   const [qrData, setQrData] = createSignal("");
   const [tokenInput, setTokenInput] = createSignal(searchParams.token as string || "");
@@ -46,9 +47,35 @@ export default function Onboarding() {
   function chooseRole(r: "initiator" | "follower") {
     setRole(r);
     if (relink) {
-      proceedAfterPassphrase();
+      // Always require re-authentication before generating a link code.
+      // Someone picking up an unlocked phone shouldn't be able to replace your connection.
+      setStep("relink-auth");
     } else {
       setStep("passphrase");
+    }
+  }
+
+  const pairingToken = () => qrData()?.split("token=")[1]
+
+  async function handleRelinkAuth() {
+    setLoading(true);
+    setError("");
+    try {
+      let ok = false;
+      if (unlockMethod() === "biometrics") {
+        ok = await unlockWithPrf();
+      } else {
+        ok = await unlock(relinkPassphrase());
+      }
+      if (!ok) {
+        setError("Authentication failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+      await proceedAfterPassphrase();
+    } catch (e: any) {
+      setError(e.message || "Authentication failed.");
+      setLoading(false);
     }
   }
 
@@ -95,7 +122,7 @@ export default function Onboarding() {
         url.searchParams.set("token", relayToken);
         setQrData(url.toString());
         setStep("show-qr");
-        startPolling();
+        startWatching();
       } catch (e: any) {
         setError(e.message || "Couldn't reach server. Please try again.");
       } finally {
@@ -115,8 +142,8 @@ export default function Onboarding() {
 
     try {
       await joinHandshake(token);
+      registerPush().catch(console.error);
       setStep("linked");
-      downloadHistoryBundle().catch(console.error);
       setTimeout(() => navigate("/", { replace: true }), 1500);
     } catch (e: any) {
       setError(e.message || "Invalid code.");
@@ -124,28 +151,22 @@ export default function Onboarding() {
     setLoading(false);
   }
 
-  
-  
+  let stopWatching: (() => void) | undefined;
 
-  let pollTimer: ReturnType<typeof setInterval> | undefined;
-
-  function startPolling() {
-    pollTimer = setInterval(async () => {
-      const partner = await pollForPartner();
-      if (partner) {
-        clearInterval(pollTimer);
+  function startWatching() {
+    stopWatching = startWatchingForPartner(
+      () => {
+        registerPush().catch(console.error);
         setStep("linked");
-        uploadHistoryBundle().catch(console.error);
         setTimeout(() => navigate("/", { replace: true }), 1500);
-      }
-    }, 3000);
+      },
+      (err) => setError(err.message),
+    );
   }
 
   onCleanup(() => {
-    if (pollTimer) clearInterval(pollTimer);
+    if (stopWatching) stopWatching();
   });
-
-
 
   return (
     <div class="page">
@@ -174,6 +195,45 @@ export default function Onboarding() {
                 </button>
               </Show>
             </div>
+          </Match>
+
+          <Match when={step() === "relink-auth"}>
+            <h2 class={styles.heading}>Confirm it's you</h2>
+            <p class={styles.sub}>Verify your identity before generating a new link code.</p>
+            <Show
+              when={unlockMethod() === "biometrics"}
+              fallback={
+                <div class={unlockStyles.form}>
+                  <input
+                    type="password"
+                    class={unlockStyles.input}
+                    placeholder="Your passphrase"
+                    value={relinkPassphrase()}
+                    onInput={(e) => setRelinkPassphrase(e.currentTarget.value)}
+                    autofocus
+                  />
+                  <Show when={error()}>
+                    <p class={unlockStyles.error}>{error()}</p>
+                  </Show>
+                  <button
+                    class="btn-primary"
+                    onClick={handleRelinkAuth}
+                    disabled={loading() || !relinkPassphrase()}
+                  >
+                    {loading() ? "Verifying..." : "Continue"}
+                  </button>
+                </div>
+              }
+            >
+              <div class={styles.actions}>
+                <Show when={error()}>
+                  <p class={unlockStyles.error}>{error()}</p>
+                </Show>
+                <button class="btn-primary" onClick={handleRelinkAuth} disabled={loading()}>
+                  {loading() ? "Verifying..." : "Verify with biometrics"}
+                </button>
+              </div>
+            </Show>
           </Match>
 
           <Match when={step() === "passphrase"}>
@@ -220,6 +280,7 @@ export default function Onboarding() {
             <div class={styles.qrFrame}>
               <QRCodeSVG {...qrCode} value={qrData()} />
             </div>
+            <code>{pairingToken()}</code>
             <button
               class="btn-primary"
               onClick={async () => {
@@ -234,7 +295,7 @@ export default function Onboarding() {
             >
               {copied() ? "Copied!" : "Share link"}
             </button>
-           
+
             <p class={styles.qrWarning}>
               Only share this with your partner. Anyone who scans it can replace your connection.
             </p>

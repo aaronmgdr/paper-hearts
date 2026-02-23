@@ -274,22 +274,42 @@ export async function joinHandshake(relayToken: string): Promise<{ partnerPublic
     identity.pairId = data.pairId;
     identity.partnerPublicKey = data.partnerPublicKey;
     await storage.saveIdentity(identity);
+  } else {
+    console.warn("[joinHandshake] no identity")
   }
 
   return { partnerPublicKeyB64: data.partnerPublicKey };
 }
 
-/** Poll relay to check if follower has joined. Returns partner public key if paired. */
-export async function pollForPartner(): Promise<string | null> {
+/**
+ * Open a WebSocket and wait for partner to join.
+ * Returns a cleanup function to close the connection.
+ */
+export function startWatchingForPartner(
+  onPaired: () => void,
+  onError?: (err: Error) => void
+): () => void {
   const pk = publicKey();
   const sk = secretKey();
-  if (!pk || !sk) return null;
+  
+  if (!pk || !sk) {
+    return () => {};
+  } else {
+    console.warn('missing', {pk: !pk, sk: !sk})
+  }
 
-  const { status, data } = await relay.getPairStatus(pk, sk);
-  if (status !== 200 || !data.paired) return null;
-
-  await completeInitiatorPairing(data.partnerPublicKey);
-  return data.partnerPublicKey;
+  return relay.watchForPartner(
+    pk,
+    sk,
+    async (partnerPublicKeyB64) => {
+      await completeInitiatorPairing(partnerPublicKeyB64);
+      onPaired();
+    },
+    (err) => {
+      console.error("[startWatchingForPartner]", err);
+      onError?.(err);
+    }
+  );
 }
 
 /** Called by initiator after follower joins — we need to fetch partner's key. */
@@ -297,13 +317,13 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
   const crypto = await loadCrypto();
   const partnerPk = crypto.fromBase64(partnerPublicKeyB64);
   setIsPaired(true);
-
+  console.info("Computing shared secret with partner public key:", partnerPublicKeyB64.slice(0, 8), "…");
   const pk = publicKey();
   const sk = secretKey();
   if (sk && pk) {
     setSharedSecret(crypto.computeSharedSecret(sk, pk, partnerPk));
   }
-
+  console.info("Shared secret computed, updating identity with partner public key");
   const identity = await storage.loadIdentity();
   if (identity) {
     identity.partnerPublicKey = partnerPublicKeyB64;

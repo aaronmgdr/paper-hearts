@@ -3,6 +3,7 @@ import { initiate, join as joinPair, pairStatus, deleteAccount } from "./routes/
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
 import { subscribePush } from "./routes/push";
 import { uploadTransfer, downloadTransfer } from "./routes/transfer";
+import { handleWsAuth, removeWaiting, type WsData } from "./pairing";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const CLIENT_DIST = join(import.meta.dir, "../client/dist");
@@ -26,11 +27,18 @@ function checkThrottle(publicKey: string | null): boolean {
   return entry.count <= THROTTLE_LIMIT;
 }
 
-const server = Bun.serve({
+const server = Bun.serve<WsData>({
   port: PORT,
-  async fetch(req) {
+  async fetch(req, server) {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // WebSocket upgrade for pairing watch
+    if (path === "/api/pairs/watch") {
+      const upgraded = server.upgrade(req, { data: { pairId: null } });
+      if (upgraded) return undefined;
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
 
     // API routes
     if (path.startsWith("/api/")) {
@@ -62,6 +70,25 @@ const server = Bun.serve({
 
     // Static file serving (SPA fallback)
     return serveStatic(path);
+  },
+
+  websocket: {
+    async message(ws, data) {
+      try {
+        const msg = JSON.parse(data as string);
+        if (msg.type === "auth") {
+          await handleWsAuth(ws, msg);
+        }
+      } catch (e) {
+        console.error("[watch] WS message parse error:", e);
+      }
+    },
+    close(ws) {
+      if (ws.data.pairId) {
+        removeWaiting(ws.data.pairId);
+        console.log(`[watch] disconnected pairId=${ws.data.pairId}`);
+      }
+    },
   },
 });
 
