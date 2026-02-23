@@ -5,8 +5,11 @@ import { execSync } from "child_process";
 
 const gitHash = (() => {
   try {
-    return execSync("git rev-parse --short HEAD").toString().trim();
-  } catch {
+    const h = execSync("git rev-parse --short HEAD").toString().trim();
+    console.log("[vite] git hash:", JSON.stringify(h));
+    return h || "unknown";
+  } catch (e) {
+    console.log("[vite] git hash error:", e);
     return "unknown";
   }
 })();
