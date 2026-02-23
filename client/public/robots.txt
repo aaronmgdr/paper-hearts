@@ -1,0 +1,4 @@
+# Paper Hearts — a private shared diary for couples
+# There is nothing here for you to index.
+User-agent: *
+Disallow: /

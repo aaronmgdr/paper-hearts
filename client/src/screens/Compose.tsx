@@ -29,7 +29,7 @@ export default function Compose() {
   }
 
   return (
-    <div class="page">
+    <div class="page" role="main">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId)}</h2>
       </header>

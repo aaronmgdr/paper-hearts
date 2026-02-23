@@ -36,15 +36,14 @@ jobs:
       - name: Install dependencies
         run: bun install --cwd server
 
+      - name: Write test .env
+        run: echo 'DATABASE_URL=postgres://postgres:postgres@localhost:5433/paperhearts' > server/.env
+
       - name: Run migrations
-        run: bun run --cwd server migrate
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5433/paperhearts
+        run: bun run --env-file .env --cwd server migrate
 
       - name: Run tests
-        run: bun run --cwd server test
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5433/paperhearts
+        run: bun run --env-file .env --cwd server test
 
   client:
     name: Client tests

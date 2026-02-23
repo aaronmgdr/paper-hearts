@@ -95,13 +95,19 @@ async function serveStatic(path: string): Promise<Response> {
   const file = Bun.file(filePath);
 
   if (await file.exists()) {
-    return new Response(file);
+    // Hashed assets (e.g. /assets/index-Ab1Cd2.js) are immutable
+    const headers = path.startsWith("/assets/")
+      ? { "Cache-Control": "public, max-age=31536000, immutable" }
+      : { "Cache-Control": "no-cache" };
+    return new Response(file, { headers });
   }
 
   // SPA fallback
   const indexFile = Bun.file(join(CLIENT_DIST, "index.html"));
   if (await indexFile.exists()) {
-    return new Response(indexFile);
+    return new Response(indexFile, {
+      headers: { "Cache-Control": "no-cache" },
+    });
   }
 
   return new Response("Not Found", { status: 404 });
