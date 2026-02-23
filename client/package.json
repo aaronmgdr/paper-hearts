@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@solidjs/router": "^0.15.4",
@@ -15,12 +16,17 @@
     "solid-qr-code": "^0.1.11"
   },
   "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/libsodium-wrappers-sumo": "^0.8.2",
     "@types/node": "^24.10.1",
+    "happy-dom": "^20.7.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
     "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.0.18",
     "workbox-precaching": "^7.4.0"
   }
 }

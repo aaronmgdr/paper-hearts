@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { startServer, stopServer } from "./setup";
-import { generateKeyPair, post } from "./helpers";
+import { generateKeyPair, post, createPair, todayDayId, authPost } from "./helpers";
 
 beforeAll(async () => {
   await startServer();
@@ -42,13 +42,14 @@ describe("POST /api/pairs/initiate", () => {
     expect(data.error).toContain("length");
   });
 
-  test("rejects duplicate public key", async () => {
+  test("re-pairing succeeds and creates a new pair", async () => {
     const { publicKey } = generateKeyPair();
-    await post("/api/pairs/initiate", { publicKey });
-    const { status, data } = await post("/api/pairs/initiate", { publicKey });
+    const res1 = await post("/api/pairs/initiate", { publicKey });
+    expect(res1.status).toBe(201);
 
-    expect(status).toBe(409);
-    expect(data.error).toContain("already registered");
+    const res2 = await post("/api/pairs/initiate", { publicKey });
+    expect(res2.status).toBe(201);
+    expect(res2.data.pairId).not.toBe(res1.data.pairId);
   });
 });
 
@@ -127,5 +128,63 @@ describe("POST /api/pairs/join", () => {
 
     const res2 = await post("/api/pairs/join", { relayToken: "abc" });
     expect(res2.status).toBe(400);
+  });
+});
+
+describe("re-pairing", () => {
+  test("initiator can re-pair after having written entries", async () => {
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    // Write an entry under the original pair
+    const writeRes = await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("old entry").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    expect(writeRes.status).toBe(201);
+
+    // Initiator re-pairs — should not crash with FK violation
+    const reInitRes = await post("/api/pairs/initiate", {
+      publicKey: initiator.publicKey,
+    });
+    expect(reInitRes.status).toBe(201);
+    expect(reInitRes.data.pairId).toBeDefined();
+
+    // Follower joins the new pair
+    const reJoinRes = await post("/api/pairs/join", {
+      publicKey: follower.publicKey,
+      relayToken: reInitRes.data.relayToken,
+    });
+    expect(reJoinRes.status).toBe(200);
+    expect(reJoinRes.data.pairId).toBe(reInitRes.data.pairId);
+  });
+
+  test("follower can re-pair after having written entries", async () => {
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    // Follower writes an entry
+    const writeRes = await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("follower entry").toString("base64") },
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(writeRes.status).toBe(201);
+
+    // New pair initiated by initiator
+    const reInitRes = await post("/api/pairs/initiate", {
+      publicKey: initiator.publicKey,
+    });
+    expect(reInitRes.status).toBe(201);
+
+    // Follower re-joins — should not crash with FK violation
+    const reJoinRes = await post("/api/pairs/join", {
+      publicKey: follower.publicKey,
+      relayToken: reInitRes.data.relayToken,
+    });
+    expect(reJoinRes.status).toBe(200);
   });
 });

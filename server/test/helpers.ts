@@ -1,5 +1,5 @@
 import sodium from "libsodium-wrappers-sumo";
-import { getBaseUrl } from "./setup";
+import { handleApi } from "../app";
 
 await sodium.ready;
 
@@ -45,13 +45,18 @@ export async function signedHeaders(
   };
 }
 
+function makeRequest(method: string, path: string, body?: string, extraHeaders?: Record<string, string>): Request {
+  return new Request(`http://localhost${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...extraHeaders },
+    body,
+  });
+}
+
 /** POST helper (unauthenticated) */
 export async function post(path: string, body: object, headers?: Record<string, string>) {
-  const res = await fetch(`${getBaseUrl()}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  });
+  const req = makeRequest("POST", path, JSON.stringify(body), headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
   return { status: res.status, data: (await res.json()) as Record<string, any> };
 }
 
@@ -64,11 +69,8 @@ export async function authPost(
 ) {
   const bodyStr = JSON.stringify(body);
   const headers = await signedHeaders("POST", path, bodyStr, publicKeyB64, secretKey);
-  const res = await fetch(`${getBaseUrl()}${path}`, {
-    method: "POST",
-    headers,
-    body: bodyStr,
-  });
+  const req = makeRequest("POST", path, bodyStr, headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
   return { status: res.status, data: (await res.json()) as Record<string, any> };
 }
 
@@ -79,10 +81,8 @@ export async function authGet(
   secretKey: Uint8Array
 ) {
   const headers = await signedHeaders("GET", path, null, publicKeyB64, secretKey);
-  const res = await fetch(`${getBaseUrl()}${path}`, {
-    method: "GET",
-    headers,
-  });
+  const req = makeRequest("GET", path, undefined, headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
   return { status: res.status, data: (await res.json()) as Record<string, any> };
 }
 

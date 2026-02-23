@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: paperhearts
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --cwd server
+
+      - name: Run migrations
+        run: bun run --cwd server migrate
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/paperhearts
+
+      - name: Run tests
+        run: bun run --cwd server test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/paperhearts
+
+  client:
+    name: Client tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --cwd client
+
+      - name: Run tests
+        run: bun run --cwd client test
