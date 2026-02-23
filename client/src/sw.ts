@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from "workbox-precaching";
+import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
+import { NavigationRoute, registerRoute } from "workbox-routing";
+import { StaleWhileRevalidate } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -11,6 +13,18 @@ interface SyncEvent extends ExtendableEvent {
 
 // Precache static assets injected by vite-plugin-pwa
 precacheAndRoute(self.__WB_MANIFEST);
+
+// SPA offline support: serve cached index.html for all navigation requests
+// (e.g. opening the app directly to /settings while offline)
+registerRoute(new NavigationRoute(createHandlerBoundToURL("/index.html")));
+
+// Cache Google Fonts responses so the app looks right offline
+registerRoute(
+  ({ url }) =>
+    url.origin === "https://fonts.googleapis.com" ||
+    url.origin === "https://fonts.gstatic.com",
+  new StaleWhileRevalidate({ cacheName: "google-fonts" })
+);
 
 // BackgroundSync: when connectivity returns, ask a client to flush the outbox
 self.addEventListener("sync", ((event: SyncEvent) => {
@@ -31,8 +45,8 @@ self.addEventListener("push", ((event: PushEvent) => {
   event.waitUntil(
     self.registration.showNotification("Paper Hearts", {
       body: "Your partner wrote today",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/icon-192x192.png",
       tag: "partner-entry",
     })
   );
