@@ -4,7 +4,6 @@ import { join } from "path";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
-  console.log("VALID PUBLUC KEY",process.env.VAPID_PUBLIC_KEY);
   console.error("DATABASE_URL is not set. Skipping migrations.");
   process.exit(0);
 }

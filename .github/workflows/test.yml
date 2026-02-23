@@ -43,7 +43,7 @@ jobs:
         run: bun run --env-file .env --cwd server migrate
 
       - name: Run tests
-        run: bun run --env-file .env --cwd server test
+        run: bun run --cwd server test
 
   client:
     name: Client tests
