@@ -19,7 +19,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
@@ -39,12 +39,12 @@ jobs:
       - name: Run migrations
         run: bun run --cwd server migrate
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/paperhearts
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/paperhearts
 
       - name: Run tests
         run: bun run --cwd server test
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/paperhearts
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/paperhearts
 
   client:
     name: Client tests
