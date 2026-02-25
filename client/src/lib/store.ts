@@ -233,7 +233,6 @@ export async function createBiometricsOnlyIdentity(): Promise<void> {
   console.log("[createBiometricsOnlyIdentity] created identity with publicKey:", publicKeyB64.slice(0, 8), "…");
   // Mark identity as biometrics-only
   const identity = await storage.loadIdentity();
-  console.log("[createBiometricsOnlyIdentity] loaded identity for update:", !!identity);
   if (identity) {
     identity.unlockMethod = "biometrics";
     await storage.saveIdentity(identity);

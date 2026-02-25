@@ -12,7 +12,7 @@ interface Entries {
 
 async function fetchDay(dayId: string): Promise<Entries> {
   const result: Entries = { mine: null, partner: null };
-
+  console.log("Loading entries for day:", dayId);
   const local = await loadDayEntries(dayId);
   applyDayFile(local, result);
 
@@ -25,7 +25,7 @@ async function fetchDay(dayId: string): Promise<Entries> {
       console.error("Failed to fetch partner entries:", e);
     }
   }
-
+  console.log("Final entries for day:", dayId, result);
   return result;
 }
 
@@ -83,12 +83,16 @@ export default function Today() {
 
     setSending(true);
     try {
+      setTimeout(() => {
+        if ("vibrate" in navigator) navigator.vibrate([20, 40, 45])
+      }, 5)
       await submitEntry(content, dayId());
       sessionStorage.removeItem(draftKey());
       setSent(true);
       mutate((prev) => ({ mine: content, partner: prev?.partner ?? null }));
     } catch (e) {
       console.error("Failed to submit entry:", e);
+    } finally {
       setSending(false);
     }
   }
@@ -128,7 +132,6 @@ export default function Today() {
               aria-label="Write your journal entry"
               value={text()}
               onInput={(e) => {
-                console.log("Draft updated:", draftKey(), e.currentTarget.value);
                 setText(e.currentTarget.value);
                 sessionStorage.setItem(draftKey(), e.currentTarget.value);
               }}

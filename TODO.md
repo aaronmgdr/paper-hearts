@@ -16,5 +16,5 @@
 * [ ] can we optimize our https://github.com/jedisct1/libsodium.js
 * [ ] 
 * [ ] dont store entries in plain text
-* [ ] see why notifications dont seem to show up
+* [x] see why notifications dont seem to show up
 * [ ] name partner

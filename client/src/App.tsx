@@ -33,7 +33,7 @@ export default function App(props: ParentProps) {
           
           if (isPaired()) {
             listenForSyncMessages();
-            registerPush().catch(console.error);
+            // registerPush().catch(console.error); [Violation] Only request notification permission in response to a user gesture.
             fetchAndDecryptEntries(getDayId()).catch(console.error);
             flushOutbox().catch(console.error);
           }
