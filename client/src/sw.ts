@@ -43,14 +43,24 @@ async function notifyClientsToFlush(): Promise<void> {
 // Push notifications from server
 self.addEventListener("push", ((event: PushEvent) => {
   event.waitUntil(
-    self.registration.showNotification("Paper Hearts", {
-      body: "Your partner wrote today",
-      icon: "/icons/icon-192x192.png",
-      badge: "/icons/icon-192x192.png",
-      tag: "partner-entry",
-    })
+    Promise.all([
+      self.registration.showNotification("Paper Hearts", {
+        body: "Your partner wrote today",
+        icon: "/icons/icon-192x192.png",
+        badge: "/icons/icon-192x192.png",
+        tag: "partner-entry",
+      }),
+      notifyClientsToFetch(),
+    ])
   );
 }) as EventListener);
+
+async function notifyClientsToFetch(): Promise<void> {
+  const clients = await self.clients.matchAll({ type: "window" });
+  for (const client of clients) {
+    client.postMessage({ type: "fetch-entries" });
+  }
+}
 
 // Notification click: focus or open the app
 self.addEventListener("notificationclick", ((event: NotificationEvent) => {

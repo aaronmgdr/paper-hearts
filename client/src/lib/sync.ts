@@ -1,6 +1,7 @@
 import { peekAll, remove } from "./outbox";
 import { signedHeaders } from "./relay";
-import { publicKey, secretKey, refreshPendingCount } from "./store";
+import { publicKey, secretKey, refreshPendingCount, fetchAndDecryptEntries } from "./store";
+import { getDayId } from "./dayid";
 
 const API_ENTRIES = "/api/entries";
 
@@ -55,6 +56,9 @@ export function listenForSyncMessages(): void {
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.type === "flush-outbox") {
       flushOutbox().catch(console.error);
+    }
+    if (event.data?.type === "fetch-entries") {
+      fetchAndDecryptEntries(getDayId()).catch(console.error);
     }
   });
 }

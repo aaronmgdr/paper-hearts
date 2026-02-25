@@ -127,7 +127,8 @@ export default function Settings() {
           <span>Notifications</span>
           <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
         </button>
-        {bioSupported() && (
+        {/* only show when there is already a passphrase set */}
+        <Show when={bioSupported() && unlockMethod() !== "biometrics"}>
           <button
             class={styles.item}
             onClick={toggleBiometrics}
@@ -136,8 +137,8 @@ export default function Settings() {
             <span>Biometrics</span>
             <span class="meta">{bioLoading() ? "..." : bioOn() ? "On" : "Off"}</span>
           </button>
-        )}
-        <Show when={unlockMethod() !== "biometrics"}>
+        </Show>
+        <Show when={!bioSupported()}>
           <Show
             when={showChangePassphrase()}
             fallback={
