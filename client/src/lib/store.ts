@@ -23,6 +23,10 @@ const [entriesVersion, setEntriesVersion] = createSignal(0);
 
 export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod, entriesVersion };
 
+export function bumpEntriesVersion() {
+  setEntriesVersion((v) => v + 1);
+}
+
 export async function refreshPendingCount(): Promise<void> {
   const items = await peekAll();
   setPendingCount(items.length);
@@ -31,9 +35,12 @@ export async function refreshPendingCount(): Promise<void> {
 export function setupNetworkListeners(): void {
   window.addEventListener("online", () => {
     setIsOnline(true);
+    console.info("Network reconnected, flushing outbox and refreshing entries");
     if (isPaired()) {
       flushOutbox().catch(console.error);
-      fetchAndDecryptEntries(getDayId()).catch(console.error);
+      fetchAndDecryptEntries(getDayId())
+        .then(() => bumpEntriesVersion())
+        .catch(console.error);
     }
   });
   window.addEventListener("offline", () => setIsOnline(false));
@@ -376,6 +383,7 @@ export function collectHistoryBundle(
         }
         console.log("[transfer] imported bundle over WS:", bundle.length, "days");
         onDone();
+        bumpEntriesVersion();
       } catch (e) {
         onError(e instanceof Error ? e : new Error(String(e)));
       }
@@ -438,6 +446,7 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
 }
 
 export async function fetchAndDecryptEntries(since: string): Promise<void> {
+  console.log("[fetchAndDecryptEntries] fetching entries since", since);
   const pk = publicKey();
   const sk = secretKey();
   const ss = sharedSecret();
@@ -471,7 +480,6 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
           timestamp: parsed.timestamp,
         });
         await storage.saveDay(dayId, existing);
-        setEntriesVersion((v) => v + 1);
       }
 
       idsToAck.push(entry.id);

@@ -1,6 +1,6 @@
 import { peekAll, remove } from "./outbox";
 import { signedHeaders } from "./relay";
-import { publicKey, secretKey, refreshPendingCount, fetchAndDecryptEntries } from "./store";
+import { publicKey, secretKey, refreshPendingCount, fetchAndDecryptEntries, bumpEntriesVersion } from "./store";
 import { getDayId } from "./dayid";
 
 const API_ENTRIES = "/api/entries";
@@ -54,11 +54,14 @@ export async function requestBackgroundSync(): Promise<void> {
 export function listenForSyncMessages(): void {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.addEventListener("message", (event) => {
+    console.info("Received SW message:", event);
     if (event.data?.type === "flush-outbox") {
       flushOutbox().catch(console.error);
     }
     if (event.data?.type === "fetch-entries") {
-      fetchAndDecryptEntries(getDayId()).catch(console.error);
+      fetchAndDecryptEntries(getDayId())
+        .then(() => bumpEntriesVersion())
+        .catch(console.error);
     }
   });
 }
