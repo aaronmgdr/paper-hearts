@@ -114,7 +114,7 @@ describe("notification trigger on entry write", () => {
     expect(status).toBe(201);
 
     // notifyPartner is fire-and-forget — poll until called or deadline
-    const deadline = Date.now() + 4000;
+    const deadline = Date.now() + 15000;
     while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 60));
     }

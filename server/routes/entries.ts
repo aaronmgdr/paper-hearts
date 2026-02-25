@@ -59,9 +59,11 @@ export async function createEntry(req: Request, path: string): Promise<Response>
   `;
 
   console.log(`[createEntry] OK id=${entry.id}`);
-
+  console.time(`notifyPartner for pairId=${auth.pairId}`);
   // Notify partner (fire-and-forget)
-  notifyPartner(auth.publicKey, auth.pairId).catch((e) =>
+  notifyPartner(auth.publicKey, auth.pairId).then(() => {
+    console.timeEnd(`notifyPartner for pairId=${auth.pairId}`);
+  }).catch((e) =>
     console.error("[createEntry] push error:", e)
   );
 

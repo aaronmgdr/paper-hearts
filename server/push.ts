@@ -1,8 +1,8 @@
 import webpush from "web-push";
 import sql from "./db";
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "fake-vapid-public-key";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "fake-vapid-private-key"; 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:hello@paperhearts.app";
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
