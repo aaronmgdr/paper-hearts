@@ -108,7 +108,7 @@ export async function join(req: Request): Promise<Response> {
 
   if (tokens.length === 0) {
     console.log(`[join] REJECTED: token not found`);
-    return Response.json({ error: "Invalid relay token" }, { status: 404 });
+    return Response.json({ error: "Invalid relay paring code" }, { status: 404 });
   }
 
   const tokenRow = tokens[0];
@@ -116,12 +116,12 @@ export async function join(req: Request): Promise<Response> {
 
   if (tokenRow.consumed) {
     console.log(`[join] REJECTED: token already consumed`);
-    return Response.json({ error: "Token already consumed" }, { status: 410 });
+    return Response.json({ error: "Pairing code already consumed" }, { status: 410 });
   }
 
   if (new Date(tokenRow.expires_at) < new Date()) {
     console.log(`[join] REJECTED: token expired`);
-    return Response.json({ error: "Token expired" }, { status: 410 });
+    return Response.json({ error: "This pairing code is too old. Generate a new one" }, { status: 410 });
   }
 
   if (publicKey === tokenRow.initiator_key) {

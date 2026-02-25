@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import Today from "./Today";
+import { getDayId } from "../lib/dayid";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -9,9 +10,15 @@ const mockLoadDayEntries = vi.fn();
 const mockFetchAndDecrypt = vi.fn().mockResolvedValue(undefined);
 const mockSubmitEntry = vi.fn().mockResolvedValue(undefined);
 
+vi.mock("../lib/dayid", () => ({
+  formatDayLabel: (dayId: string) => `Label for ${dayId}`,
+  getDayId: () => "2026-02-23",
+}));
+
 vi.mock("../lib/store", () => ({
   loadDayEntries: (...args: unknown[]) => mockLoadDayEntries(...args),
   fetchAndDecryptEntries: (...args: unknown[]) => mockFetchAndDecrypt(...args),
+  entriesVersion: () => 0,
   isPaired: () => false,
   submitEntry: (...args: unknown[]) => mockSubmitEntry(...args),
 }));
@@ -120,6 +127,7 @@ describe("Today — composing and submitting", () => {
     await userEvent.type(textarea, "hello");
 
     expect(screen.getByRole("button", { name: "Send" })).not.toBeDisabled();
+    await userEvent.clear(textarea);
   });
 
   test("submitting calls submitEntry and updates UI", async () => {
@@ -129,9 +137,9 @@ describe("Today — composing and submitting", () => {
     const textarea = await screen.findByPlaceholderText("What's on your heart today?");
     await userEvent.type(textarea, "I love you");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    await waitFor(() => expect(mockSubmitEntry).toHaveBeenCalledWith("I love you", expect.any(String)));
+    await waitFor(() => expect(mockSubmitEntry).toHaveBeenCalledWith("I love you", getDayId()));
     await waitFor(() => expect(screen.getByText("Waiting for your partner...")).toBeInTheDocument());
+
   });
 
   test("shows character count while typing", async () => {
@@ -140,7 +148,7 @@ describe("Today — composing and submitting", () => {
 
     const textarea = await screen.findByPlaceholderText("What's on your heart today?");
     await userEvent.type(textarea, "hello");
-
     expect(screen.getByText("5 characters")).toBeInTheDocument();
+    await userEvent.clear(textarea);
   });
 });

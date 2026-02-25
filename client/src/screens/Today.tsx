@@ -12,7 +12,6 @@ interface Entries {
 
 async function fetchDay(dayId: string): Promise<Entries> {
   const result: Entries = { mine: null, partner: null };
-  console.log("Loading entries for day:", dayId);
   const local = await loadDayEntries(dayId);
   applyDayFile(local, result);
 
@@ -25,7 +24,6 @@ async function fetchDay(dayId: string): Promise<Entries> {
       console.error("Failed to fetch partner entries:", e);
     }
   }
-  console.log("Final entries for day:", dayId, result);
   return result;
 }
 

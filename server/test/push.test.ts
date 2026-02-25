@@ -113,8 +113,11 @@ describe("notification trigger on entry write", () => {
     );
     expect(status).toBe(201);
 
-    // notifyPartner is fire-and-forget — give it a tick to complete
-    await new Promise((r) => setTimeout(r, 200));
+    // notifyPartner is fire-and-forget — poll until called or deadline
+    const deadline = Date.now() + 4000;
+    while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 60));
+    }
 
     expect(mockSendNotification).toHaveBeenCalledTimes(1);
     const [sub, payload] = mockSendNotification.mock.calls[0];
@@ -190,7 +193,11 @@ describe("push subscription survives re-pairing", () => {
       initiator.secretKey
     );
 
-    await new Promise((r) => setTimeout(r, 200));
+    // notifyPartner is fire-and-forget — poll until called or 3s deadline
+    const deadline = Date.now() + 3000;
+    while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
 
     expect(mockSendNotification).toHaveBeenCalledTimes(1);
     const [sub] = mockSendNotification.mock.calls[0];
