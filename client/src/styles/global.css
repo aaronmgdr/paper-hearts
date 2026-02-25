@@ -108,6 +108,26 @@ textarea::placeholder {
   color: var(--dusty-mauve);
 }
 
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--ink);
+  color: var(--parchment);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-md) 0;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

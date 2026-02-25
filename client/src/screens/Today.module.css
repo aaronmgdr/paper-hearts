@@ -94,6 +94,11 @@
   align-items: center;
   gap: var(--space-2);
 }
+.veilLabel {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--dusty-mauve);
+}
 
 .veilHeart {
   animation: breathe 3s ease-in-out infinite;

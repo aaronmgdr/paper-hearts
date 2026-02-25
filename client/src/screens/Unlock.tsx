@@ -73,7 +73,7 @@ export default function UnlockScreen(props: { onUnlocked: () => void }) {
                 Use passphrase instead
               </button>
             </Show>
-            {error() && <p class={styles.error}>{error()}</p>}
+            {error() && <p class={styles.error} role="alert">{error()}</p>}
           </div>
         </Show>
 
@@ -83,11 +83,12 @@ export default function UnlockScreen(props: { onUnlocked: () => void }) {
               type="password"
               class={styles.input}
               placeholder="Enter your passphrase"
+              aria-label="Passphrase"
               value={passphrase()}
               onInput={(e) => setPassphrase(e.currentTarget.value)}
               autofocus
             />
-            {error() && <p class={styles.error}>{error()}</p>}
+            {error() && <p class={styles.error} role="alert">{error()}</p>}
             <button type="submit" class="btn-primary" disabled={!passphrase().trim() || loading()}>
               {loading() ? "Unlocking..." : "Unlock"}
             </button>

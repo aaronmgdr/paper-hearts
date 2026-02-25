@@ -25,6 +25,7 @@ export default function App(props: ParentProps) {
 
   return (
     <Show when={isReady()} fallback={<div class="page" />}>
+      <a href="#main-content" class="skip-link">Skip to main content</a>
       <Show
         when={unlocked() || location.pathname === "/onboarding"}
         fallback={<UnlockScreen onUnlocked={() => {

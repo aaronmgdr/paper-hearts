@@ -146,7 +146,7 @@ export default function Settings() {
               </button>
             }
           >
-            <div class={styles.passphraseForm}>
+            <form class={styles.passphraseForm} onSubmit={(e) => { e.preventDefault(); handleChangePassphrase(); }}>
               <Show when={changeDone()}>
                 <p class={styles.changeSuccess}>Passphrase updated.</p>
               </Show>
@@ -155,6 +155,7 @@ export default function Settings() {
                   type="password"
                   class={styles.passphraseInput}
                   placeholder="Current passphrase"
+                  aria-label="Current passphrase"
                   value={currentPass()}
                   onInput={(e) => setCurrentPass(e.currentTarget.value)}
                   autofocus
@@ -163,6 +164,7 @@ export default function Settings() {
                   type="password"
                   class={styles.passphraseInput}
                   placeholder="New passphrase"
+                  aria-label="New passphrase"
                   value={newPass()}
                   onInput={(e) => setNewPass(e.currentTarget.value)}
                 />
@@ -170,27 +172,28 @@ export default function Settings() {
                   type="password"
                   class={styles.passphraseInput}
                   placeholder="Confirm new passphrase"
+                  aria-label="Confirm new passphrase"
                   value={confirmPass()}
                   onInput={(e) => setConfirmPass(e.currentTarget.value)}
                 />
                 <Show when={changeError()}>
-                  <p class={styles.changeError}>{changeError()}</p>
+                  <p class={styles.changeError} role="alert">{changeError()}</p>
                 </Show>
                 <div class={styles.dangerActions}>
                   <button
+                    type="submit"
                     class={styles.dangerConfirm}
                     style={{ background: "var(--blush)" }}
-                    onClick={handleChangePassphrase}
                     disabled={changeLoading() || !currentPass() || !newPass() || !confirmPass()}
                   >
                     {changeLoading() ? "Saving..." : "Save"}
                   </button>
-                  <button class={styles.dangerCancel} onClick={() => setShowChangePassphrase(false)}>
+                  <button type="button" class={styles.dangerCancel} onClick={() => setShowChangePassphrase(false)}>
                     Cancel
                   </button>
                 </div>
               </Show>
-            </div>
+            </form>
           </Show>
         </Show>
         <A href="/onboarding?relink=1" class={styles.item}>

@@ -251,12 +251,13 @@ export default function Onboarding() {
                     type="password"
                     class={unlockStyles.input}
                     placeholder="Your passphrase"
+                    aria-label="Your passphrase"
                     value={relinkPassphrase()}
                     onInput={(e) => setRelinkPassphrase(e.currentTarget.value)}
                     autofocus
                   />
                   <Show when={error()}>
-                    <p class={unlockStyles.error}>{error()}</p>
+                    <p class={unlockStyles.error} role="alert">{error()}</p>
                   </Show>
                   <button
                     class="btn-primary"
@@ -270,7 +271,7 @@ export default function Onboarding() {
             >
               <div class={styles.actions}>
                 <Show when={error()}>
-                  <p class={unlockStyles.error}>{error()}</p>
+                  <p class={unlockStyles.error} role="alert">{error()}</p>
                 </Show>
                 <button class="btn-primary" onClick={handleRelinkAuth} disabled={loading()}>
                   {loading() ? "Verifying..." : "Verify with biometrics"}
@@ -295,6 +296,7 @@ export default function Onboarding() {
                 type="password"
                 class={unlockStyles.input}
                 placeholder="Passphrase (8+ characters)"
+                aria-label="Passphrase"
                 value={passphrase()}
                 onInput={(e) => setPassphrase(e.currentTarget.value)}
               />
@@ -302,11 +304,12 @@ export default function Onboarding() {
                 type="password"
                 class={unlockStyles.input}
                 placeholder="Confirm passphrase"
+                aria-label="Confirm passphrase"
                 value={confirm()}
                 onInput={(e) => setConfirm(e.currentTarget.value)}
               />
               <Show when={error()}>
-                <p class={unlockStyles.error}>{error()}</p>
+                <p class={unlockStyles.error} role="alert">{error()}</p>
               </Show>
               <button
                 class="btn-secondary"
@@ -351,12 +354,13 @@ export default function Onboarding() {
                 type="text"
                 class={unlockStyles.input}
                 placeholder="Paste the code here"
+                aria-label="Partner's link code"
                 value={tokenInput()}
                 onInput={(e) => setTokenInput(e.currentTarget.value)}
                 autofocus
               />
               <Show when={error()}>
-                <p class={unlockStyles.error}>{error()}</p>
+                <p class={unlockStyles.error} role="alert">{error()}</p>
               </Show>
               <button
                 class="btn-primary"
@@ -369,7 +373,7 @@ export default function Onboarding() {
           </Match>
 
           <Match when={step() === "offer-bundle"}>
-            <div class={styles.linkedAnim} aria-label="You're linked">
+            <div class={styles.linkedAnim} aria-hidden="true">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
               </svg>
@@ -380,7 +384,7 @@ export default function Onboarding() {
               Only do this if you are certain this is the same person you've been writing with. Your private entries will be sent encrypted.
             </p>
             <Show when={error()}>
-              <p class={unlockStyles.error}>{error()}</p>
+              <p class={unlockStyles.error} role="alert">{error()}</p>
             </Show>
             <div class={styles.actions}>
               <button class="btn-primary" onClick={handleSendBundle} disabled={loading()}>
@@ -393,7 +397,7 @@ export default function Onboarding() {
           </Match>
 
           <Match when={step() === "receive-bundle"}>
-            <div class={styles.linkedAnim} aria-label="You're linked">
+            <div class={styles.linkedAnim} aria-hidden="true">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
               </svg>
@@ -404,7 +408,7 @@ export default function Onboarding() {
               <p class={styles.sub}>Waiting for your partner to send…</p>
             </Show>
             <Show when={error()}>
-              <p class={unlockStyles.error}>{error()}</p>
+              <p class={unlockStyles.error} role="alert">{error()}</p>
             </Show>
             <div class={styles.actions}>
               <button class="btn-primary" onClick={handleStartCollecting} disabled={loading()}>
@@ -417,7 +421,7 @@ export default function Onboarding() {
           </Match>
 
           <Match when={step() === "linked"}>
-            <div class={styles.linkedAnim} aria-label="You're linked">
+            <div class={styles.linkedAnim} aria-hidden="true">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
               </svg>

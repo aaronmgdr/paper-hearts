@@ -45,6 +45,7 @@ export default function Compose() {
 
   return (
     <div
+      id="main-content"
       class="page"
       role="main"
       style={{ height: `${viewHeight()}px`, "min-height": "unset", overflow: "hidden" }}
@@ -57,6 +58,7 @@ export default function Compose() {
         <textarea
           class={styles.textarea}
           placeholder="What's on your heart today?"
+          aria-label="Write your journal entry"
           value={text()}
           spellcheck="true"
           onInput={(e) => setText(e.currentTarget.value)}
