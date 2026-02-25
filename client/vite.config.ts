@@ -7,7 +7,8 @@ const gitHash = (() => {
   try {
     return execSync("git rev-parse --short HEAD").toString().trim() || "unknown";
   } catch {
-    return "unknown";
+    const sha = process.env.RAILWAY_GIT_COMMIT_SHA;
+    return sha ? sha.slice(0, 7) : "unknown";
   }
 })();
 
