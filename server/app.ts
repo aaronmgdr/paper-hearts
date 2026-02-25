@@ -1,6 +1,6 @@
 import { initiate, join as joinPair, pairStatus, deleteAccount } from "./routes/pairs";
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
-import { subscribePush } from "./routes/push";
+import { subscribePush, testPush } from "./routes/push";
 import { uploadTransfer, downloadTransfer } from "./routes/transfer";
 
 export async function handleApi(req: Request, path: string): Promise<Response> {
@@ -30,6 +30,9 @@ export async function handleApi(req: Request, path: string): Promise<Response> {
   // Push subscription
   if (path === "/api/push/subscribe" && req.method === "POST") {
     return subscribePush(req, path);
+  }
+  if (path === "/api/push/test" && req.method === "POST") {
+    return testPush(req, path);
   }
 
   // Account deletion

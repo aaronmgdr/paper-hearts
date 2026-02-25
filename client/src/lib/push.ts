@@ -1,4 +1,4 @@
-import { subscribePush } from "./relay";
+import { subscribePush, signedHeaders } from "./relay";
 import { publicKey, secretKey } from "./store";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
@@ -20,16 +20,14 @@ export async function isPushEnabled(): Promise<boolean> {
   return sub !== null;
 }
 
-/** Fire a local test notification via the service worker. */
+/** Send a test push notification to your partner via the server. */
 export async function sendTestNotification(): Promise<void> {
-  if (!("serviceWorker" in navigator)) return;
-  const reg = await navigator.serviceWorker.ready;
-  await reg.showNotification("Paper Hearts", {
-    body: "Your partner wrote today",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
-    tag: "test-notification",
-  });
+  const pk = publicKey();
+  const sk = secretKey();
+  if (!pk || !sk) return;
+  const path = "/api/push/test";
+  const headers = await signedHeaders("POST", path, null, pk, sk);
+  await fetch(path, { method: "POST", headers });
 }
 
 /** Unsubscribe from push notifications. */

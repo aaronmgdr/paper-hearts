@@ -1,5 +1,6 @@
 import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
+import { notifyPartner } from "../push";
 
 /**
  * POST /api/push/subscribe
@@ -36,4 +37,27 @@ export async function subscribePush(req: Request, path: string): Promise<Respons
   `;
 
   return Response.json({ status: "subscribed" });
+}
+
+/**
+ * POST /api/push/test
+ * Authenticated. Sends a test push notification to the caller's partner
+ * using the same notifyPartner path as entry submission.
+ */
+export async function testPush(req: Request, path: string): Promise<Response> {
+  let auth;
+  try {
+    auth = await verifyRequest(req, path, null);
+  } catch (e) {
+    if (e instanceof AuthError) {
+      return Response.json({ error: e.message }, { status: e.status });
+    }
+    throw e;
+  }
+
+  notifyPartner(auth.publicKey, auth.pairId).catch((e) =>
+    console.error("[testPush] push error:", e)
+  );
+
+  return Response.json({ ok: true });
 }
