@@ -2,13 +2,14 @@ import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
 import { notifyPartner } from "../push";
 
-const MAX_BLOBS_PER_DAY = 2
 
 /**
  * POST /api/entries
  * Authenticated. Upload an encrypted entry blob.
  */
 export async function createEntry(req: Request, path: string): Promise<Response> {
+  const MAX_BLOBS_PER_DAY = 2
+
   const bodyBytes = new Uint8Array(await req.clone().arrayBuffer());
 
   let auth;
