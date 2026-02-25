@@ -2,8 +2,7 @@ import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
 import { notifyPartner } from "../push";
 
-// TODO decrease after when public
-const MAX_BLOBS_PER_DAY = 20
+const MAX_BLOBS_PER_DAY = 2
 
 /**
  * POST /api/entries

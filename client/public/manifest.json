@@ -3,10 +3,12 @@
   "short_name": "Paper Hearts",
   "description": "A private shared diary for two.",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["fullscreen", "minimal-ui"],
   "background_color": "#FDF6EC",
   "theme_color": "#2C2C2C",
-    "icons": [
+  "icons": [
     {
       "src": "icons/icon-48x48.png",
       "sizes": "48x48",
@@ -55,7 +57,24 @@
     {
       "src": "icons/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/archive.jpg",
+      "sizes": "802x1392",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Your shared daily entries"
+    },
+    {
+      "src": "screenshots/today.jpg",
+      "sizes": "792x1376",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Literacy Intimacy"
     }
   ]
 }
