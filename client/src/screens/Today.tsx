@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Today.module.css";
-import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry } from "../lib/store";
+import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, entriesVersion } from "../lib/store";
 
 interface Entries {
   mine: string | null;
@@ -47,7 +47,10 @@ export default function Today() {
   const dayId = () => params.dayId || getDayId();
   const isToday = () => !params.dayId || params.dayId === getDayId();
 
-  const [entries, { mutate }] = createResource(dayId, fetchDay);
+  const [entries, { mutate }] = createResource(
+    () => ({ dayId: dayId(), _v: entriesVersion() }),
+    ({ dayId }) => fetchDay(dayId)
+  );
   const [text, setText] = createSignal("");
   const [sending, setSending] = createSignal(false);
   const [sent, setSent] = createSignal(false);

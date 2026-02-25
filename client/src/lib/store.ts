@@ -19,8 +19,9 @@ const [sharedSecret, setSharedSecret] = createSignal<Uint8Array | null>(null);
 const [pendingCount, setPendingCount] = createSignal(0);
 const [isOnline, setIsOnline] = createSignal(navigator.onLine);
 const [unlockMethod, setUnlockMethod] = createSignal<"passphrase" | "biometrics" | null>(null);
+const [entriesVersion, setEntriesVersion] = createSignal(0);
 
-export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod };
+export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod, entriesVersion };
 
 export async function refreshPendingCount(): Promise<void> {
   const items = await peekAll();
@@ -470,6 +471,7 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
           timestamp: parsed.timestamp,
         });
         await storage.saveDay(dayId, existing);
+        setEntriesVersion((v) => v + 1);
       }
 
       idsToAck.push(entry.id);
