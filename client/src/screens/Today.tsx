@@ -1,4 +1,4 @@
-import { createSignal, Show, createResource, Suspense } from "solid-js";
+import { createSignal, Show, createResource, Suspense, onMount, onCleanup } from "solid-js";
 import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
@@ -52,13 +52,30 @@ export default function Today() {
     ({ dayId }) => fetchDay(dayId)
   );
   const draftKey = () => `draft:${dayId()}`;
-  const [text, setText] = createSignal(localStorage.getItem(draftKey()) ?? "");
+  const [text, setText] = createSignal(sessionStorage.getItem(draftKey()) ?? "");
   const [sending, setSending] = createSignal(false);
   const [sent, setSent] = createSignal(false);
   const [myExpanded, setMyExpanded] = createSignal(false);
 
   const bothRevealed = () => entries()?.mine != null && entries()?.partner != null;
   const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
+
+    // Track the visual viewport height so the page shrinks when the keyboard appears,
+  // keeping the footer (and Send button) visible above the keyboard.
+  const getVVH = () => window.visualViewport?.height ?? window.innerHeight;
+  const [viewHeight, setViewHeight] = createSignal(getVVH());
+  const initialHeight = getVVH();
+  const keyboardOpen = () => viewHeight() < initialHeight - 150;
+
+
+  onMount(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewHeight(vv.height);
+    vv.addEventListener("resize", update);
+    onCleanup(() => vv.removeEventListener("resize", update));
+  });
+
 
   async function handleSubmit() {
     const content = text().trim();
@@ -67,7 +84,7 @@ export default function Today() {
     setSending(true);
     try {
       await submitEntry(content, dayId());
-      localStorage.removeItem(draftKey());
+      sessionStorage.removeItem(draftKey());
       setSent(true);
       mutate((prev) => ({ mine: content, partner: prev?.partner ?? null }));
     } catch (e) {
@@ -110,12 +127,18 @@ export default function Today() {
               placeholder="What's on your heart today?"
               aria-label="Write your journal entry"
               value={text()}
-              onInput={(e) => setText(e.currentTarget.value)}
+              onInput={(e) => {
+                console.log("Draft updated:", draftKey(), e.currentTarget.value);
+                setText(e.currentTarget.value);
+                sessionStorage.setItem(draftKey(), e.currentTarget.value);
+              }}
               autofocus
             />
           </div>
 
-          <footer class={styles.footer}>
+          <footer class={styles.footer}
+            style={keyboardOpen() ? { "padding-bottom": "var(--space-2)" } : undefined}
+          >
             <span class="meta">{text().length} characters</span>
             <button
               class={sent() ? styles.btnSent : "btn-primary"}
