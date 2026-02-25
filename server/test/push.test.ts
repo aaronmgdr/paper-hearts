@@ -1,4 +1,4 @@
-import { mock, describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { mock, describe, test, expect, beforeAll, afterAll, spyOn } from "bun:test";
 import { startServer, stopServer } from "./setup";
 
 // Mock web-push BEFORE any module that imports it is loaded.
@@ -16,11 +16,6 @@ mock.module("web-push", () => ({
     sendNotification: mockSendNotification,
   },
 }));
-
-// Set fake VAPID keys so notifyPartner doesn't short-circuit.
-// Must happen before app.ts (and push.ts) are imported.
-process.env.VAPID_PUBLIC_KEY = "fake-vapid-public-key";
-process.env.VAPID_PRIVATE_KEY = "fake-vapid-private-key";
 
 // Dynamic imports AFTER mock is registered so web-push is mocked when first loaded.
 // Static imports (above) are hoisted before any module code runs, so helpers
@@ -97,6 +92,7 @@ describe("POST /api/push/subscribe", () => {
 
 describe("notification trigger on entry write", () => {
   test("calls sendNotification when partner has a subscription", async () => {
+    const consoleErrorSpy = spyOn(console, "error");
     const { initiator, follower } = await createPair();
 
     // Register push subscription for the follower (they'll receive the notification)
@@ -118,6 +114,7 @@ describe("notification trigger on entry write", () => {
     while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 60));
     }
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
 
     expect(mockSendNotification).toHaveBeenCalledTimes(1);
     const [sub, payload] = mockSendNotification.mock.calls[0];

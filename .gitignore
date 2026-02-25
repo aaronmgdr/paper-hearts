@@ -2,6 +2,7 @@ node_modules/
 client/dist/
 *.env
 .env.*
+!.env.test
 .DS_Store
 bun.lock
 server/dist
