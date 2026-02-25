@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "@solidjs/router";
 import { initialize, isReady, isPaired, fetchAndDecryptEntries, setupNetworkListeners } from "./lib/store";
 import { getDayId } from "./lib/dayid";
 import { flushOutbox, listenForSyncMessages } from "./lib/sync";
-import { registerPush } from "./lib/push";
+// import { registerPush } from "./lib/push";
 import UnlockScreen from "./screens/Unlock";
 
 export default function App(props: ParentProps) {

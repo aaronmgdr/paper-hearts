@@ -41,7 +41,6 @@ export default function Settings() {
   });
 
   async function togglePush() {
-    console.log("Toggling push notifications...");
     setPushLoading(true);
     try {
       if (pushOn()) {
