@@ -51,7 +51,8 @@ export default function Today() {
     () => ({ dayId: dayId(), _v: entriesVersion() }),
     ({ dayId }) => fetchDay(dayId)
   );
-  const [text, setText] = createSignal("");
+  const draftKey = () => `draft:${dayId()}`;
+  const [text, setText] = createSignal(localStorage.getItem(draftKey()) ?? "");
   const [sending, setSending] = createSignal(false);
   const [sent, setSent] = createSignal(false);
   const [myExpanded, setMyExpanded] = createSignal(false);
@@ -66,6 +67,7 @@ export default function Today() {
     setSending(true);
     try {
       await submitEntry(content, dayId());
+      localStorage.removeItem(draftKey());
       setSent(true);
       mutate((prev) => ({ mine: content, partner: prev?.partner ?? null }));
     } catch (e) {
