@@ -13,7 +13,8 @@
     "@solidjs/router": "^0.15.4",
     "libsodium-wrappers-sumo": "^0.8.2",
     "solid-js": "^1.9.10",
-    "solid-qr-code": "^0.1.11"
+    "solid-qr-code": "^0.1.11",
+    "workbox-core": "^7.4.0"
   },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",

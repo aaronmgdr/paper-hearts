@@ -2,10 +2,19 @@
 import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
+import { clientsClaim } from "workbox-core";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
 };
+
+// Take control of all clients immediately when a new SW activates
+clientsClaim();
+
+// Allow the vite-plugin-pwa autoUpdate flow to activate this SW
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
 
 interface SyncEvent extends ExtendableEvent {
   tag: string;
