@@ -75,7 +75,7 @@ export default function Privacy() {
         <section>
           <h2>No advertising. No selling your data.</h2>
           <p>
-            We do have have the ability to read any of your information to sell it. 
+            We do not have the ability to read any of your information, and we do not sell it.
           </p>
         </section>
 

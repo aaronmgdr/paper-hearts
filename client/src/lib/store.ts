@@ -288,14 +288,12 @@ export async function joinHandshake(relayToken: string): Promise<{ partnerPublic
 export function startWatchingForPartner(
   onPaired: () => void,
   onError?: (err: Error) => void
-): () => void {
+): relay.WatchHandle {
   const pk = publicKey();
   const sk = secretKey();
-  
+
   if (!pk || !sk) {
-    return () => {};
-  } else {
-    console.warn('missing', {pk: !pk, sk: !sk})
+    return { stop: () => {}, sendBundle: () => {} };
   }
 
   return relay.watchForPartner(
@@ -309,6 +307,80 @@ export function startWatchingForPartner(
       console.error("[startWatchingForPartner]", err);
       onError?.(err);
     }
+  );
+}
+
+/**
+ * Encrypt all local entries and send over the initiator's open WebSocket.
+ * Pass handle.sendBundle as the sendFn.
+ */
+export async function uploadHistoryBundleOverWs(sendFn: (payload: string) => void): Promise<void> {
+  const ss = sharedSecret();
+  if (!ss) return;
+
+  const days = await storage.listDays();
+  if (days.length === 0) return;
+
+  const bundle: Array<{ dayId: string; entries: storage.StoredEntry[] }> = [];
+  for (const dayId of days) {
+    const day = await storage.loadDay(dayId);
+    if (day && day.entries.length > 0) bundle.push({ dayId, entries: day.entries });
+  }
+  if (bundle.length === 0) return;
+
+  const crypto = await loadCrypto();
+  const encrypted = crypto.encrypt(JSON.stringify(bundle), ss);
+  sendFn(crypto.toBase64(encrypted));
+  console.log("[transfer] sent history bundle over WS:", bundle.length, "days");
+}
+
+/**
+ * Open a WebSocket to collect a history bundle from the initiator.
+ * Returns a cleanup function.
+ * onDone — bundle imported successfully.
+ * onWaiting — connection open, no bundle yet (initiator hasn't sent yet).
+ * onError — connection error or timeout.
+ */
+export function collectHistoryBundle(
+  onDone: () => void,
+  onWaiting: () => void,
+  onError: (err: Error) => void
+): () => void {
+  const pk = publicKey();
+  const sk = secretKey();
+  const ss = sharedSecret();
+  if (!pk || !sk || !ss) { onError(new Error("Not unlocked")); return () => {}; }
+
+  return relay.collectBundle(
+    pk, sk,
+    async (payloadB64) => {
+      try {
+        const crypto = await loadCrypto();
+        const encrypted = crypto.fromBase64(payloadB64);
+        const plainJson = crypto.decrypt(encrypted, ss);
+        const bundle = JSON.parse(plainJson) as Array<{ dayId: string; entries: storage.StoredEntry[] }>;
+        for (const { dayId, entries } of bundle) {
+          const flipped = entries.map((e) => ({
+            ...e,
+            author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
+          }));
+          const existing = (await storage.loadDay(dayId)) || { entries: [] };
+          for (const entry of flipped) {
+            const dupe = existing.entries.some(
+              (e) => e.author === entry.author && e.timestamp === entry.timestamp
+            );
+            if (!dupe) existing.entries.push(entry);
+          }
+          await storage.saveDay(dayId, existing);
+        }
+        console.log("[transfer] imported bundle over WS:", bundle.length, "days");
+        onDone();
+      } catch (e) {
+        onError(e instanceof Error ? e : new Error(String(e)));
+      }
+    },
+    onWaiting,
+    onError
   );
 }
 
@@ -442,6 +514,42 @@ export async function uploadHistoryBundle(): Promise<void> {
   const encrypted = crypto.encrypt(JSON.stringify(bundle), ss);
   await relay.uploadTransfer(crypto.toBase64(encrypted), pk, sk);
   console.log("[transfer] uploaded history bundle:", bundle.length, "days");
+}
+
+/**
+ * Follower: single-attempt download. Returns true if a bundle was found and
+ * imported. Use this from the UI so the user isn't blocked for 30 seconds.
+ */
+export async function downloadHistoryBundleNow(): Promise<boolean> {
+  const pk = publicKey();
+  const sk = secretKey();
+  const ss = sharedSecret();
+  if (!pk || !sk || !ss) return false;
+
+  const { payload } = await relay.downloadTransfer(pk, sk);
+  if (!payload) return false;
+
+  const crypto = await loadCrypto();
+  const encrypted = crypto.fromBase64(payload);
+  const plainJson = crypto.decrypt(encrypted, ss);
+  const bundle = JSON.parse(plainJson) as Array<{ dayId: string; entries: storage.StoredEntry[] }>;
+
+  for (const { dayId, entries } of bundle) {
+    const flipped = entries.map((e) => ({
+      ...e,
+      author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
+    }));
+    const existing = (await storage.loadDay(dayId)) || { entries: [] };
+    for (const entry of flipped) {
+      const dupe = existing.entries.some(
+        (e) => e.author === entry.author && e.timestamp === entry.timestamp
+      );
+      if (!dupe) existing.entries.push(entry);
+    }
+    await storage.saveDay(dayId, existing);
+  }
+  console.log("[transfer] imported history bundle:", bundle.length, "days");
+  return true;
 }
 
 /** Follower: poll relay for history bundle, decrypt and import. */

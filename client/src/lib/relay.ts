@@ -136,8 +136,18 @@ export async function downloadTransfer(
   return res.json();
 }
 
+export interface WatchHandle {
+  /** Close the WebSocket without sending a bundle (skip path). */
+  stop: () => void;
+  /** Send an already-encrypted bundle payload to the server for relay. */
+  sendBundle: (encryptedPayloadB64: string) => void;
+}
+
 /**
- * Open a WebSocket to wait for partner to join. Returns a cleanup function.
+ * Open a WebSocket to wait for partner to join.
+ * Returns a handle with stop() and sendBundle().
+ * The WebSocket stays open after "paired" so the initiator can optionally
+ * send a history bundle before closing.
  * Signed payload: "WATCH\n{publicKeyB64}\n{timestamp}"
  */
 export function watchForPartner(
@@ -145,10 +155,10 @@ export function watchForPartner(
   secretKey: Uint8Array,
   onPaired: (partnerPublicKey: string) => void,
   onError: (err: Error) => void
-): () => void {
+): WatchHandle {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${proto}//${window.location.host}/api/pairs/watch`);
-  console.info('watch partner')
+
   ws.onopen = async () => {
     const { sign, toBase64 } = await loadCrypto();
     const pkB64 = toBase64(publicKey);
@@ -160,10 +170,14 @@ export function watchForPartner(
 
   ws.onmessage = (event) => {
     try {
-      console.log('onMessage')
       const msg = JSON.parse(event.data as string);
-      if (msg.type === "paired") onPaired(msg.partnerPublicKey);
-      else if (msg.type === "error") onError(new Error(msg.message));
+      if (msg.type === "paired") {
+        Promise.resolve(onPaired(msg.partnerPublicKey)).catch((e) => {
+          onError(new Error(e?.message || "Pairing failed"));
+        });
+      } else if (msg.type === "error") {
+        onError(new Error(msg.message));
+      }
     } catch (e) {
       console.error("[watchForPartner] bad message:", e);
     }
@@ -172,7 +186,65 @@ export function watchForPartner(
   ws.onerror = () => onError(new Error("WebSocket connection failed"));
   ws.onclose = (e) => { if (!e.wasClean) onError(new Error("WebSocket closed unexpectedly")); };
 
-  return () => ws.close();
+  return {
+    stop: () => ws.close(),
+    sendBundle: (encryptedPayloadB64: string) => {
+      ws.send(JSON.stringify({ type: "bundle", payload: encryptedPayloadB64 }));
+    },
+  };
+}
+
+/**
+ * Open a WebSocket to collect a history bundle from the initiator.
+ * Calls onBundle with the encrypted payload when received.
+ * Calls onWaiting when the connection is open but no bundle has arrived yet.
+ * Times out after timeoutMs (default 5 min).
+ * Signed payload: "COLLECT\n{publicKeyB64}\n{timestamp}"
+ */
+export function collectBundle(
+  publicKey: Uint8Array,
+  secretKey: Uint8Array,
+  onBundle: (encryptedPayloadB64: string) => void,
+  onWaiting: () => void,
+  onError: (err: Error) => void,
+  timeoutMs = 5 * 60 * 1000
+): () => void {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${window.location.host}/api/pairs/watch`);
+
+  let done = false;
+  const timer = setTimeout(() => {
+    if (!done) { done = true; ws.close(); onError(new Error("Timed out waiting for entries.")); }
+  }, timeoutMs);
+
+  ws.onopen = async () => {
+    const { sign, toBase64 } = await loadCrypto();
+    const pkB64 = toBase64(publicKey);
+    const timestamp = new Date().toISOString();
+    const payload = `COLLECT\n${pkB64}\n${timestamp}`;
+    const signature = sign(new TextEncoder().encode(payload), secretKey);
+    ws.send(JSON.stringify({ type: "collect_auth", publicKey: pkB64, timestamp, signature: toBase64(signature) }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data as string);
+      if (msg.type === "bundle") {
+        clearTimeout(timer); done = true; ws.close(); onBundle(msg.payload);
+      } else if (msg.type === "ready") {
+        onWaiting();
+      } else if (msg.type === "error") {
+        clearTimeout(timer); done = true; ws.close(); onError(new Error(msg.message));
+      }
+    } catch (e) {
+      console.error("[collectBundle] bad message:", e);
+    }
+  };
+
+  ws.onerror = () => { clearTimeout(timer); if (!done) { done = true; onError(new Error("WebSocket connection failed")); } };
+  ws.onclose = () => { clearTimeout(timer); if (!done) { done = true; onError(new Error("Connection lost. Try again.")); } };
+
+  return () => { clearTimeout(timer); done = true; ws.close(); };
 }
 
 export async function subscribePush(

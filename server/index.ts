@@ -1,6 +1,6 @@
 import { join } from "path";
 import { handleApi } from "./app";
-import { handleWsAuth, removeWaiting, type WsData } from "./pairing";
+import { handleWsAuth, handleWsCollect, handleWsBundle, removeWaiting, type WsData } from "./pairing";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const CLIENT_DIST = join(import.meta.dir, "../client/dist");
@@ -32,7 +32,7 @@ const server = Bun.serve<WsData>({
 
     // WebSocket upgrade for pairing watch
     if (path === "/api/pairs/watch") {
-      const upgraded = server.upgrade(req, { data: { pairId: null } });
+      const upgraded = server.upgrade(req, { data: { pairId: null, role: null } });
       if (upgraded) return undefined;
       return new Response("WebSocket upgrade failed", { status: 400 });
     }
@@ -75,6 +75,10 @@ const server = Bun.serve<WsData>({
         const msg = JSON.parse(data as string);
         if (msg.type === "auth") {
           await handleWsAuth(ws, msg);
+        } else if (msg.type === "collect_auth") {
+          await handleWsCollect(ws, msg);
+        } else if (msg.type === "bundle" && ws.data.pairId) {
+          handleWsBundle(ws, msg.payload);
         }
       } catch (e) {
         console.error("[watch] WS message parse error:", e);
@@ -82,8 +86,8 @@ const server = Bun.serve<WsData>({
     },
     close(ws) {
       if (ws.data.pairId) {
-        removeWaiting(ws.data.pairId);
-        console.log(`[watch] disconnected pairId=${ws.data.pairId}`);
+        removeWaiting(ws);
+        console.log(`[watch] disconnected pairId=${ws.data.pairId} role=${ws.data.role}`);
       }
     },
   },

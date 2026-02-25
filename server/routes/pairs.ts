@@ -155,8 +155,8 @@ export async function join(req: Request): Promise<Response> {
 
   console.log(`[join] OK pairId=${result.pairId} partnerKey=${result.partnerPublicKey.slice(0, 8)}…`);
 
-  // Notify initiator's waiting WebSocket if connected
-  notifyPaired(result.pairId, result.partnerPublicKey);
+  // Notify initiator's waiting WebSocket with the follower's public key
+  notifyPaired(result.pairId, publicKey);
 
   return Response.json(result, { status: 200 });
 }

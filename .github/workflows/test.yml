@@ -37,7 +37,9 @@ jobs:
         run: bun install --cwd server
 
       - name: Write test .env
-        run: echo 'DATABASE_URL=postgres://postgres:postgres@localhost:5433/paperhearts' > server/.env
+        run: |
+          echo 'DATABASE_URL=postgres://postgres:postgres@localhost:5433/paperhearts' > server/.env
+          echo 'DATABASE_URL=postgres://postgres:postgres@localhost:5433/paperhearts' > server/.env.test
 
       - name: Run migrations
         run: bun run --env-file .env --cwd server migrate

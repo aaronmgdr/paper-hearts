@@ -8,6 +8,7 @@
     "build": "bun run --cwd client build",
     "start": "bun run  --cwd server start",
     "deploy": "bun run start",
+    "test": "bun run --cwd client test & bun run --cwd server test",
     "migrate": "bun run --cwd server migrate"
   },
   "dependencies": {

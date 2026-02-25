@@ -68,6 +68,15 @@
   color: var(--veiled);
 }
 
+.bundleWarning {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--dusty-mauve);
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
 .qrWarning {
   font-family: var(--font-ui);
   font-size: 13px;

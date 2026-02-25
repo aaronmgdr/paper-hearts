@@ -4,14 +4,15 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 
 const QRCodeSVG = lazy(() => import("solid-qr-code").then((m) => ({ default: m.QRCodeSVG })));
 
-import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, startWatchingForPartner, unlock, unlockWithPrf, unlockMethod } from "../lib/store";
+import type { WatchHandle } from "../lib/relay";
+import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, startWatchingForPartner, unlock, unlockWithPrf, unlockMethod, uploadHistoryBundleOverWs, collectHistoryBundle } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
 import { registerPush } from "../lib/push";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
-type Step = "start" | "passphrase" | "relink-auth" | "show-qr" | "scan-qr" | "linked";
+type Step = "start" | "passphrase" | "relink-auth" | "show-qr" | "scan-qr" | "linked" | "offer-bundle" | "receive-bundle";
 
   const qrCode: QRSVGProps = {
     value: "", // this is replaced dynamically, but we need to set it to something to avoid type errors
@@ -39,6 +40,7 @@ export default function Onboarding() {
   const [loading, setLoading] = createSignal(false);
   const [prfSupported, setPrfSupported] = createSignal(false);
   const [copied, setCopied] = createSignal(false);
+  const [bundleWaiting, setBundleWaiting] = createSignal(false);
 
   onMount(async () => {
     setPrfSupported(await isPrfSupported());
@@ -143,29 +145,70 @@ export default function Onboarding() {
     try {
       await joinHandshake(token);
       registerPush().catch(console.error);
-      setStep("linked");
-      setTimeout(() => navigate("/", { replace: true }), 1500);
+      if (relink) {
+        setStep("receive-bundle");
+      } else {
+        setStep("linked");
+        setTimeout(() => navigate("/", { replace: true }), 1500);
+      }
     } catch (e: any) {
       setError(e.message || "Invalid code.");
     }
     setLoading(false);
   }
 
-  let stopWatching: (() => void) | undefined;
+  let watchHandle: WatchHandle | undefined;
 
   function startWatching() {
-    stopWatching = startWatchingForPartner(
+    watchHandle = startWatchingForPartner(
       () => {
         registerPush().catch(console.error);
-        setStep("linked");
-        setTimeout(() => navigate("/", { replace: true }), 1500);
+        if (relink) {
+          setStep("offer-bundle");
+        } else {
+          setStep("linked");
+          setTimeout(() => navigate("/", { replace: true }), 1500);
+        }
       },
       (err) => setError(err.message),
     );
   }
 
+  async function handleSendBundle() {
+    setLoading(true);
+    setError("");
+    try {
+      if (watchHandle) await uploadHistoryBundleOverWs(watchHandle.sendBundle);
+    } catch (e: any) {
+      setError(e.message || "Failed to send entries.");
+    }
+    setLoading(false);
+    setStep("linked");
+    setTimeout(() => navigate("/", { replace: true }), 1500);
+  }
+
+  function handleSkipBundle() {
+    watchHandle?.stop();
+    setStep("linked");
+    setTimeout(() => navigate("/", { replace: true }), 1500);
+  }
+
+  let stopCollecting: (() => void) | undefined;
+
+  function handleStartCollecting() {
+    setLoading(true);
+    setError("");
+    setBundleWaiting(false);
+    stopCollecting = collectHistoryBundle(
+      () => { setLoading(false); navigate("/", { replace: true }); },
+      () => { setBundleWaiting(true); setLoading(false); },
+      (err) => { setLoading(false); setError(err.message); }
+    );
+  }
+
   onCleanup(() => {
-    if (stopWatching) stopWatching();
+    watchHandle?.stop();
+    stopCollecting?.();
   });
 
   return (
@@ -321,6 +364,54 @@ export default function Onboarding() {
                 disabled={loading() || !tokenInput().trim()}
               >
                 {loading() ? "Linking..." : "Link diaries"}
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "offer-bundle"}>
+            <div class={styles.linkedAnim} aria-label="You're linked">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </div>
+            <h2 class={styles.heading}>You're linked.</h2>
+            <p class={styles.sub}>Share your diary history with your partner's new device?</p>
+            <p class={styles.bundleWarning}>
+              Only do this if you are certain this is the same person you've been writing with. Your private entries will be sent encrypted.
+            </p>
+            <Show when={error()}>
+              <p class={unlockStyles.error}>{error()}</p>
+            </Show>
+            <div class={styles.actions}>
+              <button class="btn-primary" onClick={handleSendBundle} disabled={loading()}>
+                {loading() ? "Sending..." : "Share my entries"}
+              </button>
+              <button class="btn-secondary" onClick={handleSkipBundle} disabled={loading()}>
+                Skip for now
+              </button>
+            </div>
+          </Match>
+
+          <Match when={step() === "receive-bundle"}>
+            <div class={styles.linkedAnim} aria-label="You're linked">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </div>
+            <h2 class={styles.heading}>You're linked.</h2>
+            <p class={styles.sub}>Your partner can share their diary history with you.</p>
+            <Show when={bundleWaiting()}>
+              <p class={styles.sub}>Waiting for your partner to send…</p>
+            </Show>
+            <Show when={error()}>
+              <p class={unlockStyles.error}>{error()}</p>
+            </Show>
+            <div class={styles.actions}>
+              <button class="btn-primary" onClick={handleStartCollecting} disabled={loading()}>
+                {loading() ? "Receiving…" : (error() ? "Try again" : "Accept entries")}
+              </button>
+              <button class="btn-secondary" onClick={() => navigate("/", { replace: true })} disabled={loading()}>
+                Skip
               </button>
             </div>
           </Match>
