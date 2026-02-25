@@ -6,7 +6,12 @@ export function getDayId(date: Date = new Date()): string {
   if (d.getHours() < PIVOT_HOUR) {
     d.setDate(d.getDate() - 1);
   }
-  return d.toISOString().slice(0, 10);
+  // Use local date parts — toISOString() returns UTC, which gives the wrong date
+  // for users in non-UTC timezones (e.g. US users after ~4 PM get tomorrow's date).
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /** Format a dayId for display, e.g. "Monday, Feb 17" */

@@ -50,11 +50,14 @@ export async function verifyRequest(
   if (Date.now() - tsDate.getTime() > MAX_TIMESTAMP_AGE_MS) {
     throw new AuthError("Timestamp too old", 401);
   }
+  if (tsDate.getTime() - Date.now() > MAX_TIMESTAMP_AGE_MS) {
+    throw new AuthError("Timestamp too far in future", 401);
+  }
 
   // Reconstruct signed payload
   const bodyHash = bodyBytes
     ? Buffer.from(
-        await crypto.subtle.digest("SHA-256", bodyBytes)
+        await crypto.subtle.digest("SHA-256", bodyBytes.buffer as ArrayBuffer)
       ).toString("hex")
     : "";
 

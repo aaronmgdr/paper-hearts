@@ -129,10 +129,19 @@ export async function join(req: Request): Promise<Response> {
     return Response.json({ error: "Cannot join your own pair" }, { status: 400 });
   }
 
-  // Register follower and consume token in a transaction
-  // Delete any existing user record first (handles re-pairing)
+  // Register follower and consume token atomically in a transaction.
+  // The UPDATE uses AND NOT consumed to guard against TOCTOU races where two
+  // concurrent requests both read consumed=false before either writes.
   const result = await sql.begin(async (tx) => {
     // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
+    const consumed = await tx`
+      UPDATE relay_tokens SET consumed = true
+      WHERE token = ${relayToken} AND NOT consumed
+      RETURNING token
+    `;
+    if (consumed.length === 0) return null;
+
+    // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
       VALUES (${publicKey}, ${tokenRow.pair_id})
@@ -142,16 +151,17 @@ export async function join(req: Request): Promise<Response> {
             push_p256dh = NULL,
             push_auth = NULL
     `;
-    // @ts-expect-error — same
-    await tx`
-      UPDATE relay_tokens SET consumed = true WHERE token = ${relayToken}
-    `;
 
     return {
       pairId: tokenRow.pair_id,
       partnerPublicKey: tokenRow.initiator_key,
     };
   });
+
+  if (!result) {
+    console.log(`[join] REJECTED: token consumed by concurrent request`);
+    return Response.json({ error: "Token already consumed" }, { status: 410 });
+  }
 
   console.log(`[join] OK pairId=${result.pairId} partnerKey=${result.partnerPublicKey.slice(0, 8)}…`);
 
