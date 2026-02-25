@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
@@ -11,6 +11,21 @@ export default function Compose() {
   const [text, setText] = createSignal("");
   const [sending, setSending] = createSignal(false);
   const [sent, setSent] = createSignal(false);
+
+  // Track the visual viewport height so the page shrinks when the keyboard appears,
+  // keeping the footer (and Send button) visible above the keyboard.
+  const getVVH = () => window.visualViewport?.height ?? window.innerHeight;
+  const [viewHeight, setViewHeight] = createSignal(getVVH());
+  const initialHeight = getVVH();
+  const keyboardOpen = () => viewHeight() < initialHeight - 150;
+
+  onMount(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewHeight(vv.height);
+    vv.addEventListener("resize", update);
+    onCleanup(() => vv.removeEventListener("resize", update));
+  });
 
   async function handleSubmit() {
     const content = text().trim();
@@ -29,7 +44,11 @@ export default function Compose() {
   }
 
   return (
-    <div class="page" role="main">
+    <div
+      class="page"
+      role="main"
+      style={{ height: `${viewHeight()}px`, "min-height": "unset", overflow: "hidden" }}
+    >
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId)}</h2>
       </header>
@@ -39,12 +58,16 @@ export default function Compose() {
           class={styles.textarea}
           placeholder="What's on your heart today?"
           value={text()}
+          spellcheck="true"
           onInput={(e) => setText(e.currentTarget.value)}
           autofocus
         />
       </div>
 
-      <footer class={styles.footer}>
+      <footer
+        class={styles.footer}
+        style={keyboardOpen() ? { "padding-bottom": "var(--space-2)" } : undefined}
+      >
         <span class="meta">{text().length} characters</span>
         <button
           class={sent() ? styles.btnSent : "btn-primary"}
