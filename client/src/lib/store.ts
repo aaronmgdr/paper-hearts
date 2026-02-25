@@ -458,9 +458,11 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
       const dayId = entry.dayId;
       const existing = (await storage.loadDay(dayId)) || { entries: [] };
 
-      // Don't add duplicates
-      const hasPartnerEntry = existing.entries.some((e) => e.author === "partner");
-      if (!hasPartnerEntry) {
+      // Don't add duplicates — check by timestamp so multiple entries per day work
+      const isDupe = existing.entries.some(
+        (e) => e.author === "partner" && e.timestamp === parsed.timestamp
+      );
+      if (!isDupe) {
         existing.entries.push({
           dayId,
           author: "partner",

@@ -127,8 +127,12 @@ export default function Settings() {
           <span>Notifications</span>
           <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
         </button>
-        {bioSupported() && unlockMethod() !== "biometrics" && (
-          <button class={styles.item} onClick={toggleBiometrics} disabled={bioLoading()}>
+        {bioSupported() && (
+          <button
+            class={styles.item}
+            onClick={toggleBiometrics}
+            disabled={bioLoading() || (bioOn() && unlockMethod() === "biometrics")}
+          >
             <span>Biometrics</span>
             <span class="meta">{bioLoading() ? "..." : bioOn() ? "On" : "Off"}</span>
           </button>

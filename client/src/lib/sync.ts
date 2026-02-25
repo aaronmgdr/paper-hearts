@@ -4,30 +4,38 @@ import { publicKey, secretKey, refreshPendingCount } from "./store";
 
 const API_ENTRIES = "/api/entries";
 
+let _flushing = false;
+
 /**
  * Flush all pending outbox items: sign fresh and POST to relay.
  * Silently skips if keys aren't available. Removes items on success.
  */
 export async function flushOutbox(): Promise<void> {
-  const pk = publicKey();
-  const sk = secretKey();
-  if (!pk || !sk) return;
+  if (_flushing) return;
+  _flushing = true;
+  try {
+    const pk = publicKey();
+    const sk = secretKey();
+    if (!pk || !sk) return;
 
-  const items = await peekAll();
-  for (const item of items) {
-    try {
-      const body = JSON.stringify({ dayId: item.dayId, payload: item.payloadB64 });
-      const headers = await signedHeaders("POST", API_ENTRIES, body, pk, sk);
-      const res = await fetch(API_ENTRIES, { method: "POST", headers, body });
-      if (res.ok) {
-        await remove(item.id);
+    const items = await peekAll();
+    for (const item of items) {
+      try {
+        const body = JSON.stringify({ dayId: item.dayId, payload: item.payloadB64 });
+        const headers = await signedHeaders("POST", API_ENTRIES, body, pk, sk);
+        const res = await fetch(API_ENTRIES, { method: "POST", headers, body });
+        if (res.ok) {
+          await remove(item.id);
+        }
+      } catch (err) {
+        console.info("Failed to flush outbox item", item.id, err);
+        // Network error — item stays in outbox for next flush
       }
-    } catch (err) {
-      console.info("Failed to flush outbox item", item.id, err);
-      // Network error — item stays in outbox for next flush
     }
+    await refreshPendingCount();
+  } finally {
+    _flushing = false;
   }
-  await refreshPendingCount();
 }
 
 /** Register BackgroundSync tag (Android/Chrome only, no-op on Safari). */

@@ -39,14 +39,14 @@ export async function createEntry(req: Request, path: string): Promise<Response>
     return Response.json({ error: "dayId must be YYYY-MM-DD" }, { status: 400 });
   }
 
-  // Rate limit: max 2 blobs per dayId per key
+  // Rate limit: max entries per dayId per key
   const [countResult] = await sql`
     SELECT COUNT(*)::int AS count FROM entries
     WHERE author_key = ${auth.publicKey} AND day_id = ${dayId}
   `;
   if (countResult.count >= MAX_BLOBS_PER_DAY) {
     return Response.json(
-      { error: "Rate limit: max 2 entries per day" },
+      { error: `Rate limit: max ${MAX_BLOBS_PER_DAY} entries per day` },
       { status: 429 }
     );
   }

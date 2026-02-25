@@ -158,7 +158,11 @@ export async function saveIdentity(identity: StoredIdentity): Promise<void> {
 export async function loadIdentity(): Promise<StoredIdentity | null> {
   const data = await read("identity", "identity.json");
   if (!data) return null;
-  return JSON.parse(data);
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }
 
 // ── Entries (one file per dayId) ─────────────────────────────
@@ -181,7 +185,11 @@ export async function saveDay(dayId: string, day: DayFile): Promise<void> {
 export async function loadDay(dayId: string): Promise<DayFile | null> {
   const data = await read("entries", `${dayId}.json`);
   if (!data) return null;
-  return JSON.parse(data);
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }
 
 /** List all dayIds with stored entries, sorted descending. */
