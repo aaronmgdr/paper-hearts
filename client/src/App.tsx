@@ -12,6 +12,9 @@ export default function App(props: ParentProps) {
   const location = useLocation();
 
   onMount(async () => {
+    if (/Android/i.test(navigator.userAgent)) {
+      document.documentElement.classList.add("is-android");
+    }
     await initialize();
     setupNetworkListeners();
     // If no identity exists, go to onboarding

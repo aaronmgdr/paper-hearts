@@ -1,4 +1,4 @@
-import { createSignal, Show, createResource, Suspense, onMount, onCleanup } from "solid-js";
+import { createSignal, Show, createResource, Suspense } from "solid-js";
 import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
@@ -58,26 +58,11 @@ export default function Today() {
   const bothRevealed = () => entries()?.mine != null && entries()?.partner != null;
   const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
 
-    // Track the visual viewport height so the page shrinks when the keyboard appears,
-  // keeping the footer (and Send button) visible above the keyboard.
-  const getVVH = () => window.visualViewport?.height ?? window.innerHeight;
-  const [viewHeight, setViewHeight] = createSignal(getVVH());
-  const initialHeight = getVVH();
-  const keyboardOpen = () => viewHeight() < initialHeight - 150;
-
-
-  onMount(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => setViewHeight(vv.height);
-    vv.addEventListener("resize", update);
-    onCleanup(() => vv.removeEventListener("resize", update));
-  });
-
-
   async function handleSubmit() {
-    const content = text().trim();
-    if (!content || sending()) return;
+    
+    if (!text().trim() || sending()) return;
+    // Do not trim content. we want multiline formatting to be preserved, and users may intentionally include leading/trailing spaces for emphasis or formatting. If we trim, they might lose the intended meaning or style of their entry. Instead, we can disable the Send button until there's at least one non-space character, ensuring that empty entries cannot be submitted while still respecting the user's formatting choices.
+    const content = text();
 
     setSending(true);
     try {
@@ -96,7 +81,7 @@ export default function Today() {
   }
 
   return (
-    <div id="main-content" class="page" role="main">
+    <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose() }} role="main">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId())}</h2>
         <Show when={isDevMode() && isToday()}>
@@ -125,6 +110,7 @@ export default function Today() {
 
           <div class={styles.editor}>
             <textarea
+              id="composer"
               class={styles.textarea}
               placeholder="What's on your heart today?"
               aria-label="Write your journal entry"
@@ -137,9 +123,7 @@ export default function Today() {
             />
           </div>
 
-          <footer class={styles.footer}
-            style={keyboardOpen() ? { "padding-bottom": "var(--space-2)" } : undefined}
-          >
+          <footer class={styles.footer}>
             <span class="meta">{text().length} characters</span>
             <button
               class={sent() ? styles.btnSent : "btn-primary"}
