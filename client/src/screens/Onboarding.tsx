@@ -219,8 +219,18 @@ export default function Onboarding() {
       <div class={styles.center}>
         <Switch>
           <Match when={step() === "start"}>
+            <Show when={!relink}>
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--blush)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <line x1="9" y1="7" x2="15" y2="7" />
+                <line x1="9" y1="11" x2="15" y2="11" />
+                <line x1="9" y1="15" x2="12" y2="15" />
+              </svg>
+            </Show>
             <h1 class={styles.heading}>{relink ? "Re-add your partner" : "Start your diary"}</h1>
             <p class={styles.sub}>{relink ? "Generate a code for your partner to scan on their new device." : "Paper Hearts is a private shared diary for two."}</p>
+           
             <div class={styles.actions}>
               <Show
                 when={relink}
@@ -238,6 +248,9 @@ export default function Onboarding() {
                 </button>
               </Show>
             </div>
+             <Show when={!relink}>
+              <small class={styles.sub}>Wait until you and your partner have a moment together to continue.</small>
+            </Show>
           </Match>
 
           <Match when={step() === "relink-auth"}>

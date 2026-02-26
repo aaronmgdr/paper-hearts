@@ -18,6 +18,10 @@
   font-size: 16px;
   max-width: 280px;
 }
+small.sub  {
+  font-size: 12px;
+  max-width: 280px;
+}
 
 .actions {
   display: flex;

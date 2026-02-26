@@ -1,9 +1,9 @@
-import { For, Switch, Match, createResource } from "solid-js";
-import { A } from "@solidjs/router";
+import { For, Switch, Match, createResource, onMount } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
 import { formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Archive.module.css";
-import { loadAllDays, loadDayEntries } from "../lib/store";
+import { loadAllDays, loadDayEntries, publicKey } from "../lib/store";
 
 interface DayEntry {
   dayId: string;
@@ -34,7 +34,16 @@ async function fetchArchive(): Promise<DayEntry[]> {
 }
 
 export default function Archive() {
+    const navigate = useNavigate();
+
   const [days] = createResource(fetchArchive);
+
+  onMount(() => {
+    if (!publicKey()) {
+      navigate("/onboarding");
+      return;
+    }
+  });
 
   return (
     <div class="page">

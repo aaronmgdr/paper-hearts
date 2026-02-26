@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Today.module.css";
-import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, entriesVersion } from "../lib/store";
+import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, entriesVersion, publicKey } from "../lib/store";
 
 interface Entries {
   mine: string | null;
@@ -59,7 +59,10 @@ export default function Today() {
   const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
 
   async function handleSubmit() {
-    
+    if (!publicKey()) {
+      navigate("/onboarding");
+      return;
+    }
     if (!text().trim() || sending()) return;
     // Do not trim content. we want multiline formatting to be preserved, and users may intentionally include leading/trailing spaces for emphasis or formatting. If we trim, they might lose the intended meaning or style of their entry. Instead, we can disable the Send button until there's at least one non-space character, ensuring that empty entries cannot be submitted while still respecting the user's formatting choices.
     const content = text();

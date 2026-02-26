@@ -3,7 +3,7 @@ import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, unlockMethod } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, unlockMethod, publicKey } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
@@ -27,6 +27,10 @@ export default function Settings() {
   const [changeDone, setChangeDone] = createSignal(false);
 
   onMount(async () => {
+    if (!publicKey()) {
+      navigate("/onboarding");
+      return;
+    }
     // Check push status
     setPushOn(await isPushEnabled());
     setPushLoading(false);
