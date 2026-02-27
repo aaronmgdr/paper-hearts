@@ -6,13 +6,23 @@ import { flushOutbox, listenForSyncMessages } from "./lib/sync";
 // import { registerPush } from "./lib/push";
 import UnlockScreen from "./screens/Unlock";
 
+
+function detectIfProbablyUsesVisualKeyboard() {
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
+
 export default function App(props: ParentProps) {
   const [unlocked, setUnlocked] = createSignal(false);
   const location = useLocation();
 
   onMount(async () => {
     if (/Android/i.test(navigator.userAgent)) {
-      document.documentElement.classList.add("is-android");
+      document.documentElement.classList.add("is-mobile");
+    } else if (/iPhone|iPad/i.test(navigator.userAgent)) {
+      document.documentElement.classList.add("is-mobile");
+    } else if (detectIfProbablyUsesVisualKeyboard()) {
+      document.documentElement.classList.add("is-mobile");
     }
     await initialize();
     setupNetworkListeners();

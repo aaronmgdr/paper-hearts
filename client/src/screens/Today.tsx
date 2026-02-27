@@ -54,6 +54,7 @@ export default function Today() {
   const [sending, setSending] = createSignal(false);
   const [sent, setSent] = createSignal(false);
   const [myExpanded, setMyExpanded] = createSignal(false);
+  const [composerFocused, setComposerFocused] = createSignal(false);
 
   const bothRevealed = () => entries()?.mine != null && entries()?.partner != null;
   const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
@@ -84,20 +85,10 @@ export default function Today() {
   }
 
   return (
-    <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose() }} role="main">
+    <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose(), [styles.composerFocused]: composerFocused() }} role="main">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId())}</h2>
-        <Show when={isDevMode() && isToday()}>
-          <input
-            type="date"
-            class={styles.devDateInput}
-            max={getDayId()}
-            onChange={(e) => {
-              const val = e.currentTarget.value;
-              if (val) navigate(`/archive/${val}`);
-            }}
-          />
-        </Show>
+        <span class="meta">{text().length} characters</span> 
       </header>
 
       <Suspense>
@@ -123,18 +114,37 @@ export default function Today() {
                 sessionStorage.setItem(draftKey(), e.currentTarget.value);
               }}
               autofocus
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
             />
           </div>
 
           <footer class={styles.footer}>
-            <span class="meta">{text().length} characters</span>
+            <div>
+              <Show when={isDevMode() && isToday()}>
+                <input
+                  type="date"
+                  class={styles.devDateInput}
+                  max={getDayId()}
+                  onChange={(e) => {
+                    const val = e.currentTarget.value;
+                    if (val) navigate(`/archive/${val}`);
+                  }}
+                />
+              </Show>
+            </div>
+            
             <button
+              type="submit"
+              form="composer"
               class={sent() ? styles.btnSent : "btn-primary"}
               onClick={handleSubmit}
               disabled={!text().trim() || sending()}
+              tabIndex={0}
             >
               {sent() ? "Sent" : sending() ? "Sending..." : "Send"}
             </button>
+            
           </footer>
         </Show>
 
