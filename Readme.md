@@ -8,7 +8,7 @@
 * offline composition and sync
 * private and encrypted by default
 * gentle notifications when your partner has written
-* late nights -- entries written until 4am count for the day before
+* late nights -- entries written until 11am count for the day before
 * Comming soon: Review Mode -- periodically review what you wrote to reflect on your relationship together
 
 ### Technicals
