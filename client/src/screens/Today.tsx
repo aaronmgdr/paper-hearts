@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Today.module.css";
-import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, entriesVersion, publicKey } from "../lib/store";
+import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, updateEntry, entriesVersion, publicKey } from "../lib/store";
 
 interface Entries {
   mine: string | null;
@@ -55,9 +55,24 @@ export default function Today() {
   const [sent, setSent] = createSignal(false);
   const [myExpanded, setMyExpanded] = createSignal(false);
   const [composerFocused, setComposerFocused] = createSignal(false);
+  const [editing, setEditing] = createSignal(false);
+  const [editText, setEditText] = createSignal("");
+  const [editDayId, setEditDayId] = createSignal("");
 
   const bothRevealed = () => entries()?.mine != null && entries()?.partner != null;
   const showCompose = () => (isToday() || isDevMode()) && entries()?.mine == null;
+  const showEditButton = () => isToday() && entries()?.mine != null && !editing();
+
+  function startEditing() {
+    setEditDayId(dayId()); // lock dayId at this moment — avoids day-rollover issues
+    setEditText(entries()?.mine ?? "");
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setEditing(false);
+    setEditText("");
+  }
 
   async function handleSubmit() {
     if (!publicKey()) {
@@ -84,12 +99,36 @@ export default function Today() {
     }
   }
 
+  async function handleUpdate() {
+    if (!editText().trim() || sending()) return;
+    const content = editText();
+    setSending(true);
+    try {
+      setTimeout(() => {
+        if ("vibrate" in navigator) navigator.vibrate([20, 40, 45])
+      }, 5)
+      await updateEntry(content, editDayId());
+      setEditing(false);
+      mutate((prev) => ({ mine: content, partner: prev?.partner ?? null }));
+    } catch (e) {
+      console.error("Failed to update entry:", e);
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
-    <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose(), [styles.composerFocused]: composerFocused() }} role="main">
+    <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose() || editing(), [styles.composerFocused]: composerFocused() }} role="main">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId())}</h2>
         <Show when={showCompose()}>
-          <span class="meta">{text().length} characters</span> 
+          <span class="meta">{text().length} characters</span>
+        </Show>
+        <Show when={editing()}>
+          <div class={styles.editingMeta}>
+            <span class="meta">{editText().length} characters</span>
+            <button class={styles.cancelEdit} onClick={cancelEditing}>Cancel</button>
+          </div>
         </Show>
       </header>
 
@@ -103,38 +142,59 @@ export default function Today() {
               <span class="label">Your partner has written today</span>
             </div>
           </Show>
-            
-            
 
           <form class={styles.editor}>
-              <textarea
-                id="composer"
-                class={styles.textarea}
-                placeholder="What's on your heart today?"
-                aria-label="Write your journal entry"
-                value={text()}
-                onInput={(e) => {
-                  setText(e.currentTarget.value);
-                  sessionStorage.setItem(draftKey(), e.currentTarget.value);
-                }}
-                autofocus
-                onFocus={() => setComposerFocused(true)}
-                onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
-              />
-              <button
-                type="submit"
-                form="composer"
-                classList={{ [styles.btnSent]: sent(), "btn-primary": !sent(), [styles.submitButton]: true }}
-                onClick={handleSubmit}
-                disabled={!text().trim() || sending()}
-                tabIndex={0}
-              >
-                {sent() ? "Sent" : sending() ? "Sending..." : "Send"}
-              </button>
+            <textarea
+              id="composer"
+              class={styles.textarea}
+              placeholder="What's on your heart today?"
+              aria-label="Write your journal entry"
+              value={text()}
+              onInput={(e) => {
+                setText(e.currentTarget.value);
+                sessionStorage.setItem(draftKey(), e.currentTarget.value);
+              }}
+              autofocus
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
+            />
+            <button
+              type="submit"
+              form="composer"
+              classList={{ [styles.btnSent]: sent(), "btn-primary": !sent(), [styles.submitButton]: true }}
+              onClick={handleSubmit}
+              disabled={!text().trim() || sending()}
+              tabIndex={0}
+            >
+              {sent() ? "Sent" : sending() ? "Sending..." : "Send"}
+            </button>
           </form>
         </Show>
 
-        <Show when={!showCompose()}>
+        <Show when={editing()}>
+          <form class={styles.editor}>
+            <textarea
+              class={styles.textarea}
+              aria-label="Edit your journal entry"
+              value={editText()}
+              onInput={(e) => setEditText(e.currentTarget.value)}
+              autofocus
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
+            />
+            <button
+              type="button"
+              classList={{ "btn-primary": true, [styles.submitButton]: true }}
+              onClick={handleUpdate}
+              disabled={!editText().trim() || sending()}
+              tabIndex={0}
+            >
+              {sending() ? "Saving..." : "Update"}
+            </button>
+          </form>
+        </Show>
+
+        <Show when={!showCompose() && !editing()}>
           <div class={styles.entries}>
             <Show when={entries()?.mine}>
               {(text) => (
@@ -172,6 +232,12 @@ export default function Today() {
                   <p class={styles.entryText}>{text()}</p>
                 </div>
               )}
+            </Show>
+
+            <Show when={showEditButton()}>
+              <button class={styles.editButton} onClick={startEditing}>
+                Edit my entry
+              </button>
             </Show>
           </div>
         </Show>

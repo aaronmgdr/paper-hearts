@@ -46,6 +46,25 @@ export async function peekAll(): Promise<OutboxItem[]> {
   });
 }
 
+/** Replace the payload of a queued item for the given dayId.
+ *  Returns true if an item was found and updated, false if nothing was queued for that day. */
+export async function replaceForDayId(dayId: string, payloadB64: string): Promise<boolean> {
+  const db = await openDB();
+  const items: OutboxItem[] = await new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const existing = items.find((i) => i.dayId === dayId);
+  if (!existing) { db.close(); return false; }
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put({ ...existing, payloadB64 });
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
 export async function remove(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {

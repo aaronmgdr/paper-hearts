@@ -13,7 +13,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
  * Send a push notification to a user's partner.
  * Fire-and-forget — errors are logged but don't propagate.
  */
-export async function notifyPartner(authorKey: string, pairId: string): Promise<void> {
+export async function notifyPartner(authorKey: string, pairId: string, isUpdate = false): Promise<void> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log("[push] VAPID keys not configured, skipping");
     return;
@@ -44,7 +44,7 @@ export async function notifyPartner(authorKey: string, pairId: string): Promise<
   try {
     await webpush.sendNotification(
       subscription,
-      JSON.stringify({ type: "partner-entry" })
+      JSON.stringify({ type: isUpdate ? "partner-entry-updated" : "partner-entry" })
     );
     console.log(`[push] sent to ${partner.public_key.slice(0, 8)}…`);
   } catch (e: any) {

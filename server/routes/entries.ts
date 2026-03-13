@@ -8,8 +8,6 @@ import { notifyPartner } from "../push";
  * Authenticated. Upload an encrypted entry blob.
  */
 export async function createEntry(req: Request, path: string): Promise<Response> {
-  const MAX_BLOBS_PER_DAY = 2
-
   const bodyBytes = new Uint8Array(await req.clone().arrayBuffer());
 
   let auth;
@@ -39,30 +37,25 @@ export async function createEntry(req: Request, path: string): Promise<Response>
     return Response.json({ error: "dayId must be YYYY-MM-DD" }, { status: 400 });
   }
 
-  // Rate limit: max entries per dayId per key
-  const [countResult] = await sql`
-    SELECT COUNT(*)::int AS count FROM entries
-    WHERE author_key = ${auth.publicKey} AND day_id = ${dayId}
-  `;
-  if (countResult.count >= MAX_BLOBS_PER_DAY) {
-    return Response.json(
-      { error: `Rate limit: max ${MAX_BLOBS_PER_DAY} entries per day` },
-      { status: 429 }
-    );
-  }
-
-  // Store the encrypted blob
+  // Upsert: one entry per author per day. On conflict, replace payload and
+  // reset fetched_at/acked_at so partner re-receives the updated entry.
   const payloadBytes = Buffer.from(payload, "base64");
   const [entry] = await sql`
     INSERT INTO entries (author_key, pair_id, day_id, payload)
     VALUES (${auth.publicKey}, ${auth.pairId}, ${dayId}, ${payloadBytes})
-    RETURNING id
+    ON CONFLICT (author_key, day_id) DO UPDATE
+      SET payload     = EXCLUDED.payload,
+          updated_at  = now(),
+          fetched_at  = NULL,
+          acked_at    = NULL
+    RETURNING id, (updated_at IS NOT NULL AND xmax != 0) AS is_update
   `;
 
-  console.log(`[createEntry] OK id=${entry.id}`);
+  const isUpdate = entry.is_update;
+  console.log(`[createEntry] ${isUpdate ? "updated" : "created"} id=${entry.id}`);
   console.time(`notifyPartner for pairId=${auth.pairId}`);
   // Notify partner (fire-and-forget)
-  notifyPartner(auth.publicKey, auth.pairId).then(() => {
+  notifyPartner(auth.publicKey, auth.pairId, isUpdate).then(() => {
     console.timeEnd(`notifyPartner for pairId=${auth.pairId}`);
   }).catch((e) =>
     console.error("[createEntry] push error:", e)

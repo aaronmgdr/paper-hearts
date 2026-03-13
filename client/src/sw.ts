@@ -51,10 +51,12 @@ async function notifyClientsToFlush(): Promise<void> {
 
 // Push notifications from server
 self.addEventListener("push", ((event: PushEvent) => {
+  const data = event.data?.json() as { type?: string } | undefined;
+  const isUpdate = data?.type === "partner-entry-updated";
   event.waitUntil(
     Promise.all([
       self.registration.showNotification("Paper Hearts", {
-        body: "Your partner wrote today",
+        body: isUpdate ? "Your partner updated their entry" : "Your partner wrote today",
         icon: "/icons/icon-192x192.png",
         badge: "/icons/icon-192x192.png",
         tag: "partner-entry",

@@ -3,7 +3,7 @@ import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getDayId } from "./dayid";
-import { enqueue, peekAll } from "./outbox";
+import { enqueue, replaceForDayId, peekAll } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
 import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
 
@@ -414,14 +414,20 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
 // ── Entries ─────────────────────────────────────────────────
 
 export async function submitEntry(text: string, dayId: string): Promise<void> {
-  // Save locally
+  // Save locally — one entry per day, replace any existing "me" entry
   const existing = (await storage.loadDay(dayId)) || { entries: [] };
-  existing.entries.push({
+  const idx = existing.entries.findIndex((e) => e.author === "me");
+  const entry: storage.StoredEntry = {
     dayId,
     author: "me",
     payload: text,
     timestamp: new Date().toISOString(),
-  });
+  };
+  if (idx >= 0) {
+    existing.entries[idx] = entry;
+  } else {
+    existing.entries.push(entry);
+  }
   await storage.saveDay(dayId, existing);
 
   // Encrypt and queue for relay
@@ -439,6 +445,40 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
   const payloadB64 = crypto.toBase64(encrypted);
 
   await enqueue(dayId, payloadB64);
+  await refreshPendingCount();
+  requestBackgroundSync().catch(console.error);
+  flushOutbox().catch(console.error);
+}
+
+export async function updateEntry(text: string, dayId: string): Promise<void> {
+  // Update local storage — preserve original timestamp, just replace content
+  const existing = (await storage.loadDay(dayId)) || { entries: [] };
+  const idx = existing.entries.findIndex((e) => e.author === "me");
+  if (idx >= 0) {
+    existing.entries[idx] = { ...existing.entries[idx], payload: text };
+  } else {
+    existing.entries.push({ dayId, author: "me", payload: text, timestamp: new Date().toISOString() });
+  }
+  await storage.saveDay(dayId, existing);
+
+  // Re-encrypt and update relay — replace in outbox if still queued, otherwise enqueue fresh
+  const ss = sharedSecret();
+  if (!ss) throw new Error("Not unlocked or not paired");
+
+  const crypto = await loadCrypto();
+  const plaintext = JSON.stringify({
+    text,
+    format: "markdown",
+    timestamp: existing.entries.find((e) => e.author === "me")!.timestamp,
+  });
+  const encrypted = crypto.encrypt(plaintext, ss);
+  const payloadB64 = crypto.toBase64(encrypted);
+
+  const replaced = await replaceForDayId(dayId, payloadB64);
+  if (!replaced) {
+    await enqueue(dayId, payloadB64);
+  }
+
   await refreshPendingCount();
   requestBackgroundSync().catch(console.error);
   flushOutbox().catch(console.error);
@@ -467,19 +507,20 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
       const dayId = entry.dayId;
       const existing = (await storage.loadDay(dayId)) || { entries: [] };
 
-      // Don't add duplicates — check by timestamp so multiple entries per day work
-      const isDupe = existing.entries.some(
-        (e) => e.author === "partner" && e.timestamp === parsed.timestamp
-      );
-      if (!isDupe) {
-        existing.entries.push({
-          dayId,
-          author: "partner",
-          payload: parsed.text,
-          timestamp: parsed.timestamp,
-        });
-        await storage.saveDay(dayId, existing);
+      // One partner entry per day — replace any existing one (handles edits/updates)
+      const partnerIdx = existing.entries.findIndex((e) => e.author === "partner");
+      const partnerEntry: storage.StoredEntry = {
+        dayId,
+        author: "partner",
+        payload: parsed.text,
+        timestamp: parsed.timestamp,
+      };
+      if (partnerIdx >= 0) {
+        existing.entries[partnerIdx] = partnerEntry;
+      } else {
+        existing.entries.push(partnerEntry);
       }
+      await storage.saveDay(dayId, existing);
 
       idsToAck.push(entry.id);
     } catch (e) {
