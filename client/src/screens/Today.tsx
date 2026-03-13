@@ -88,7 +88,9 @@ export default function Today() {
     <div id="main-content" class="page" classList={{ [styles.composeMode]: showCompose(), [styles.composerFocused]: composerFocused() }} role="main">
       <header class={styles.header}>
         <h2>{formatDayLabel(dayId())}</h2>
-        <span class="meta">{text().length} characters</span> 
+        <Show when={showCompose()}>
+          <span class="meta">{text().length} characters</span> 
+        </Show>
       </header>
 
       <Suspense>
@@ -101,51 +103,35 @@ export default function Today() {
               <span class="label">Your partner has written today</span>
             </div>
           </Show>
-
-          <div class={styles.editor}>
-            <textarea
-              id="composer"
-              class={styles.textarea}
-              placeholder="What's on your heart today?"
-              aria-label="Write your journal entry"
-              value={text()}
-              onInput={(e) => {
-                setText(e.currentTarget.value);
-                sessionStorage.setItem(draftKey(), e.currentTarget.value);
-              }}
-              autofocus
-              onFocus={() => setComposerFocused(true)}
-              onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
-            />
-          </div>
-
-          <footer class={styles.footer}>
-            <div>
-              <Show when={isDevMode() && isToday()}>
-                <input
-                  type="date"
-                  class={styles.devDateInput}
-                  max={getDayId()}
-                  onChange={(e) => {
-                    const val = e.currentTarget.value;
-                    if (val) navigate(`/archive/${val}`);
-                  }}
-                />
-              </Show>
-            </div>
             
-            <button
-              type="submit"
-              form="composer"
-              class={sent() ? styles.btnSent : "btn-primary"}
-              onClick={handleSubmit}
-              disabled={!text().trim() || sending()}
-              tabIndex={0}
-            >
-              {sent() ? "Sent" : sending() ? "Sending..." : "Send"}
-            </button>
             
-          </footer>
+
+          <form class={styles.editor}>
+              <textarea
+                id="composer"
+                class={styles.textarea}
+                placeholder="What's on your heart today?"
+                aria-label="Write your journal entry"
+                value={text()}
+                onInput={(e) => {
+                  setText(e.currentTarget.value);
+                  sessionStorage.setItem(draftKey(), e.currentTarget.value);
+                }}
+                autofocus
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setTimeout(() => setComposerFocused(false), 300)}
+              />
+              <button
+                type="submit"
+                form="composer"
+                classList={{ [styles.btnSent]: sent(), "btn-primary": !sent(), [styles.submitButton]: true }}
+                onClick={handleSubmit}
+                disabled={!text().trim() || sending()}
+                tabIndex={0}
+              >
+                {sent() ? "Sent" : sending() ? "Sending..." : "Send"}
+              </button>
+          </form>
         </Show>
 
         <Show when={!showCompose()}>

@@ -89,8 +89,8 @@ textarea::placeholder {
 .page {
   max-width: var(--max-content);
   margin: 0 auto;
-  padding: var(--space-3) var(--padding-x);
-  min-height: 100dvh;
+  padding: var(--space-2);
+  min-height: calc(100vh - 56px);
   display: flex;
   flex-direction: column;
 }
