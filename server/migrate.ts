@@ -8,6 +8,22 @@ if (!DATABASE_URL) {
   process.exit(0);
 }
 
+// Ensure the target database exists before attempting migrations.
+// Connect to the "postgres" maintenance DB (always exists) to create it.
+const url = new URL(DATABASE_URL);
+const dbName = url.pathname.slice(1); // strip leading "/"
+const maintenanceUrl = new URL(DATABASE_URL);
+maintenanceUrl.pathname = "/postgres";
+const maintenance = postgres(maintenanceUrl.toString());
+const existing = await maintenance`
+  SELECT 1 FROM pg_database WHERE datname = ${dbName}
+`;
+if (existing.length === 0) {
+  console.log(`  create database: ${dbName}`);
+  await maintenance.unsafe(`CREATE DATABASE "${dbName}"`);
+}
+await maintenance.end();
+
 const sql = postgres(DATABASE_URL);
 const MIGRATIONS_DIR = join(import.meta.dir, "migrations");
 
