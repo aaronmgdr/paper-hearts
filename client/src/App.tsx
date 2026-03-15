@@ -17,13 +17,32 @@ export default function App(props: ParentProps) {
   const location = useLocation();
 
   onMount(async () => {
-    if (/Android/i.test(navigator.userAgent)) {
-      document.documentElement.classList.add("is-mobile");
-    } else if (/iPhone|iPad/i.test(navigator.userAgent)) {
-      document.documentElement.classList.add("is-mobile");
-    } else if (detectIfProbablyUsesVisualKeyboard()) {
-      document.documentElement.classList.add("is-mobile");
+    // ── Service worker update handling ──────────────────────────────────────
+    if ("serviceWorker" in navigator) {
+      // When user returns to the app after it was backgrounded, a new SW may
+      // already be installed and waiting. Send SKIP_WAITING so it activates.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          navigator.serviceWorker.getRegistration().then((reg) => {
+            if (reg?.waiting) {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        }
+      });
+
+      // When a new SW takes control, reload to serve the latest assets.
+      // Guard: only reload if there was already a controller (i.e. this is an
+      // update, not the very first SW install on a fresh visit).
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          window.location.reload();
+        });
+      }
     }
+    // ────────────────────────────────────────────────────────────────────────
+
+   
     await initialize();
     setupNetworkListeners();
     // If no identity exists, go to onboarding
