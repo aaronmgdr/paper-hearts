@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "@solidjs/router";
 import { getDayId, formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Today.module.css";
-import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, updateEntry, entriesVersion, publicKey } from "../lib/store";
+import { loadDayEntries, fetchAndDecryptEntries, isPaired, submitEntry, updateEntry, entriesVersion, publicKey, partnerName } from "../lib/store";
 
 interface Entries {
   mine: string | null;
@@ -139,7 +139,7 @@ export default function Today() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--blush)" stroke="none" aria-hidden="true">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
               </svg>
-              <span class="label">Your partner has written today</span>
+              <span class="label">{partnerName()} has written today</span>
             </div>
           </Show>
 
@@ -216,19 +216,19 @@ export default function Today() {
             <Show
               when={entries()?.partner}
               fallback={
-                <div class={styles.veil} role="status" aria-label="Waiting for partner's entry">
+                <div class={styles.veil} role="status" aria-label={`Waiting for ${partnerName()}'s entry`}>
                   <div class={styles.veilHeart} aria-hidden="true">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--blush)" stroke="none">
                       <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                     </svg>
                   </div>
-                  <p class={styles.veilLabel}>Waiting for your partner...</p>
+                  <p class={styles.veilLabel}>Waiting for {partnerName()}...</p>
                 </div>
               }
             >
               {(text) => (
                 <div class={styles.entryCard} classList={{ [styles.revealed]: bothRevealed() }}>
-                  <span class="label">Partner</span>
+                  <span class="label">{partnerName()}</span>
                   <p class={styles.entryText}>{text()}</p>
                 </div>
               )}

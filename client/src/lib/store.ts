@@ -20,8 +20,9 @@ const [pendingCount, setPendingCount] = createSignal(0);
 const [isOnline, setIsOnline] = createSignal(navigator.onLine);
 const [unlockMethod, setUnlockMethod] = createSignal<"passphrase" | "biometrics" | null>(null);
 const [entriesVersion, setEntriesVersion] = createSignal(0);
+const [partnerName, setPartnerNameSignal] = createSignal("Partner");
 
-export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod, entriesVersion };
+export { isReady, isPaired, publicKey, secretKey, pendingCount, isOnline, unlockMethod, entriesVersion, partnerName };
 
 export function bumpEntriesVersion() {
   setEntriesVersion((v) => v + 1);
@@ -74,6 +75,7 @@ export async function initialize(): Promise<void> {
     setPublicKey(crypto.fromBase64(identity.publicKey));
     setIsPaired(!!identity.pairId && !!identity.partnerPublicKey);
     setUnlockMethod(identity.unlockMethod ?? "passphrase");
+    if (identity.partnerName) setPartnerNameSignal(identity.partnerName);
   }
   setIsReady(true);
 }
@@ -575,7 +577,7 @@ export async function exportMonth(monthStr: string): Promise<string> {
     }
     if (partner) {
       lines.push("");
-      lines.push("Partner");
+      lines.push(partnerName());
       lines.push(partner.payload);
     }
     lines.push("");
@@ -692,6 +694,15 @@ export async function downloadHistoryBundle(): Promise<void> {
     }
   }
   console.log("[transfer] no history bundle received after", MAX_ATTEMPTS, "attempts");
+}
+
+export async function savePartnerName(name: string): Promise<void> {
+  const identity = await storage.loadIdentity();
+  if (!identity) return;
+  const trimmed = name.trim();
+  identity.partnerName = trimmed || undefined;
+  await storage.saveIdentity(identity);
+  setPartnerNameSignal(trimmed || "Partner");
 }
 
 export async function breakupAndForget(): Promise<void> {

@@ -3,7 +3,7 @@ import { A, useNavigate } from "@solidjs/router";
 import { formatDayLabel } from "../lib/dayid";
 import Nav from "../components/Nav";
 import styles from "./Archive.module.css";
-import { loadAllDays, loadDayEntries, publicKey } from "../lib/store";
+import { loadAllDays, loadDayEntries, publicKey, partnerName } from "../lib/store";
 
 interface DayEntry {
   dayId: string;
@@ -69,7 +69,7 @@ export default function Archive() {
               {(day) => (
                 <A href={`/archive/${day.dayId}`} class={styles.row}>
                   <span class={styles.dayLabel}>{formatDayLabel(day.dayId)}</span>
-                  <span class={styles.hearts} aria-label={heartLabel(day)}>
+                  <span class={styles.hearts} aria-label={heartLabel(day, partnerName())}>
                     <Heart filled={day.myEntry} />
                     <Heart filled={day.partnerEntry} />
                   </span>
@@ -93,9 +93,9 @@ function Heart(props: { filled: boolean }) {
   );
 }
 
-function heartLabel(day: DayEntry): string {
+function heartLabel(day: DayEntry, name: string): string {
   if (day.myEntry && day.partnerEntry) return "Both wrote";
   if (day.myEntry) return "Only you wrote";
-  if (day.partnerEntry) return "Only partner wrote";
+  if (day.partnerEntry) return `Only ${name} wrote`;
   return "Neither wrote";
 }

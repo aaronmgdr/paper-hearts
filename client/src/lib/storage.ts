@@ -149,6 +149,7 @@ export interface StoredIdentity {
   unlockMethod?: "passphrase" | "biometrics"; // undefined = passphrase (legacy)
   pairId: string | null;
   partnerPublicKey: string | null;
+  partnerName?: string; // user-given name for their partner, stored locally only
 }
 
 export async function saveIdentity(identity: StoredIdentity): Promise<void> {

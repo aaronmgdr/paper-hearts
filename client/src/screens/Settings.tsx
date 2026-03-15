@@ -3,7 +3,7 @@ import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, unlockMethod, publicKey } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, savePartnerName, unlockMethod, publicKey, partnerName } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
@@ -25,6 +25,20 @@ export default function Settings() {
   const [changeLoading, setChangeLoading] = createSignal(false);
   const [changeError, setChangeError] = createSignal("");
   const [changeDone, setChangeDone] = createSignal(false);
+
+  // Partner name
+  const [showRenamePartner, setShowRenamePartner] = createSignal(false);
+  const [partnerNameInput, setPartnerNameInput] = createSignal("");
+
+  function openRenamePartner() {
+    setPartnerNameInput(partnerName() === "Partner" ? "" : partnerName());
+    setShowRenamePartner(true);
+  }
+
+  async function handleSavePartnerName() {
+    await savePartnerName(partnerNameInput());
+    setShowRenamePartner(false);
+  }
 
   // Export
   const currentMonth = () => {
@@ -165,6 +179,40 @@ export default function Settings() {
       </header>
 
       <div class={styles.list}>
+        <Show
+          when={showRenamePartner()}
+          fallback={
+            <button class={styles.item} onClick={openRenamePartner}>
+              <span>Partner name</span>
+              <span class="meta">{partnerName() === "Partner" ? "Not set" : partnerName()}</span>
+            </button>
+          }
+        >
+          <form class={styles.passphraseForm} onSubmit={(e) => { e.preventDefault(); handleSavePartnerName(); }}>
+            <input
+              type="text"
+              class={styles.passphraseInput}
+              placeholder="e.g. Alex"
+              aria-label="Partner's name"
+              value={partnerNameInput()}
+              onInput={(e) => setPartnerNameInput(e.currentTarget.value)}
+              maxLength={30}
+              autofocus
+            />
+            <div class={styles.dangerActions}>
+              <button
+                type="submit"
+                class={styles.dangerConfirm}
+                style={{ background: "var(--blush)" }}
+              >
+                Save
+              </button>
+              <button type="button" class={styles.dangerCancel} onClick={() => setShowRenamePartner(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Show>
         <button class={styles.item} onClick={togglePush} disabled={pushLoading()}>
           <span>Notifications</span>
           <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
