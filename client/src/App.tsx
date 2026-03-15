@@ -7,11 +7,6 @@ import { flushOutbox, listenForSyncMessages } from "./lib/sync";
 import UnlockScreen from "./screens/Unlock";
 
 
-function detectIfProbablyUsesVisualKeyboard() {
-  return window.matchMedia("(pointer: coarse)").matches;
-}
-
-
 export default function App(props: ParentProps) {
   const [unlocked, setUnlocked] = createSignal(false);
   const location = useLocation();
