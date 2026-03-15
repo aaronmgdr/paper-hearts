@@ -3,7 +3,7 @@ import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, unlockMethod, publicKey } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, unlockMethod, publicKey } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
@@ -25,6 +25,16 @@ export default function Settings() {
   const [changeLoading, setChangeLoading] = createSignal(false);
   const [changeError, setChangeError] = createSignal("");
   const [changeDone, setChangeDone] = createSignal(false);
+
+  // Export
+  const currentMonth = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const [showExport, setShowExport] = createSignal(false);
+  const [exportMonthVal, setExportMonthVal] = createSignal(currentMonth());
+  const [exportLoading, setExportLoading] = createSignal(false);
+  const [exportEmpty, setExportEmpty] = createSignal(false);
 
   onMount(async () => {
     if (!publicKey()) {
@@ -119,6 +129,35 @@ export default function Settings() {
     }
   }
 
+  async function handleExport() {
+    setExportEmpty(false);
+    setExportLoading(true);
+    try {
+      const content = await exportMonth(exportMonthVal());
+      if (!content) {
+        setExportEmpty(true);
+        return;
+      }
+      // const [year, month] = exportMonthVal().split("-").map(Number);
+      // const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+      //   month: "long", year: "numeric",
+      // });
+      const filename = `paper-hearts-${exportMonthVal()}.txt`;
+      const file = new File([content], filename, { type: "text/plain" });
+
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      if (e?.name !== "AbortError") console.error("Export failed:", e);
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   return (
     <div class="page">
       <header class={styles.header}>
@@ -199,6 +238,30 @@ export default function Settings() {
               </Show>
             </form>
           </Show>
+        </Show>
+        <button class={styles.item} onClick={() => { setShowExport((v) => !v); setExportEmpty(false); }}>
+          <span>Export entries</span>
+        </button>
+        <Show when={showExport()}>
+          <div class={styles.exportPanel}>
+            <input
+              type="month"
+              class={styles.monthInput}
+              value={exportMonthVal()}
+              onInput={(e) => { setExportMonthVal(e.currentTarget.value); setExportEmpty(false); }}
+              aria-label="Select month to export"
+            />
+            <button
+              class="btn-primary"
+              onClick={handleExport}
+              disabled={exportLoading() || !exportMonthVal()}
+            >
+              {exportLoading() ? "Exporting..." : "Export"}
+            </button>
+            <Show when={exportEmpty()}>
+              <p class={styles.exportEmpty}>No entries for this month.</p>
+            </Show>
+          </div>
         </Show>
         <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner

@@ -50,35 +50,67 @@ describe("POST /api/entries", () => {
     expect(data.error).toContain("YYYY-MM-DD");
   });
 
-  test("enforces rate limit of 2 per day", async () => {
-    const { initiator } = await createPair();
+  test("upserts on second submission for the same day (one entry per day)", async () => {
+    const { initiator, follower } = await createPair();
     const dayId = todayDayId();
-    const payload = Buffer.from("test").toString("base64");
 
     const res1 = await authPost(
       "/api/entries",
-      { dayId, payload },
+      { dayId, payload: Buffer.from("first version").toString("base64") },
       initiator.publicKey,
       initiator.secretKey
     );
     expect(res1.status).toBe(201);
+    const firstId = res1.data.id;
 
     const res2 = await authPost(
       "/api/entries",
-      { dayId, payload },
+      { dayId, payload: Buffer.from("updated version").toString("base64") },
       initiator.publicKey,
       initiator.secretKey
     );
     expect(res2.status).toBe(201);
+    // Upsert returns the same row id
+    expect(res2.data.id).toBe(firstId);
 
-    const res3 = await authPost(
+    // Follower receives the updated payload, not the original
+    const fetchRes = await authGet(
+      `/api/entries?since=${dayId}`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(fetchRes.data.entries).toHaveLength(1);
+    expect(fetchRes.data.entries[0].payload).toBe(
+      Buffer.from("updated version").toString("base64")
+    );
+  });
+
+  test("edit after ack re-queues the entry for partner", async () => {
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    // Initiator writes, follower fetches and acks
+    await authPost(
       "/api/entries",
-      { dayId, payload },
+      { dayId, payload: Buffer.from("original").toString("base64") },
       initiator.publicKey,
       initiator.secretKey
     );
-    expect(res3.status).toBe(429);
-    expect(res3.data.error).toContain("Rate limit");
+    const fetchRes1 = await authGet(`/api/entries?since=${dayId}`, follower.publicKey, follower.secretKey);
+    await authPost("/api/entries/ack", { entryIds: [fetchRes1.data.entries[0].id] }, follower.publicKey, follower.secretKey);
+
+    // Initiator edits (upsert resets acked_at)
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("edited").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    // Follower can now fetch the updated entry
+    const fetchRes2 = await authGet(`/api/entries?since=${dayId}`, follower.publicKey, follower.secretKey);
+    expect(fetchRes2.data.entries).toHaveLength(1);
+    expect(fetchRes2.data.entries[0].payload).toBe(Buffer.from("edited").toString("base64"));
   });
 
   test("rejects unknown public key", async () => {

@@ -76,6 +76,41 @@
   padding: var(--space-2) 0;
 }
 
+.exportPanel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-3);
+  border-bottom: 1px solid var(--veiled);
+  flex-wrap: wrap;
+}
+
+.monthInput {
+  flex: 1;
+  min-width: 140px;
+  padding: var(--space-2);
+  border: 1px solid var(--veiled);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  background: transparent;
+  color: var(--ink);
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.monthInput:focus {
+  outline: none;
+  border-color: var(--blush);
+}
+
+.exportEmpty {
+  width: 100%;
+  font-size: 14px;
+  color: var(--dusty-mauve);
+  margin: 0;
+}
+
 .danger {
   margin-top: var(--space-5);
   padding-bottom: calc(56px + var(--space-3));

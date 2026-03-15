@@ -123,6 +123,44 @@ describe("notification trigger on entry write", () => {
     expect(JSON.parse(payload as string)).toMatchObject({ type: "partner-entry" });
   });
 
+  test("sends partner-entry-updated type when same dayId is submitted twice", async () => {
+    const { initiator, follower } = await createPair();
+    await authPost("/api/push/subscribe", fakeSub, follower.publicKey, follower.secretKey);
+
+    mockSendNotification.mockClear();
+
+    const dayId = todayDayId();
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("first").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    // Wait for first notification
+    const deadline1 = Date.now() + 5000;
+    while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline1) {
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    expect(JSON.parse(mockSendNotification.mock.calls[0][1] as string)).toMatchObject({ type: "partner-entry" });
+
+    mockSendNotification.mockClear();
+
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("edited").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    // Wait for update notification
+    const deadline2 = Date.now() + 5000;
+    while (mockSendNotification.mock.calls.length === 0 && Date.now() < deadline2) {
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    expect(JSON.parse(mockSendNotification.mock.calls[0][1] as string)).toMatchObject({ type: "partner-entry-updated" });
+  });
+
   test("does not call sendNotification when partner has no subscription", async () => {
     const { initiator } = await createPair();
 

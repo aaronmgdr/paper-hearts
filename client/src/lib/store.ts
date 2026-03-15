@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
-import { getDayId } from "./dayid";
+import { getDayId, formatDayLabel } from "./dayid";
 import { enqueue, replaceForDayId, peekAll } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
 import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
@@ -539,6 +539,51 @@ export async function loadDayEntries(dayId: string): Promise<storage.DayFile | n
 
 export async function loadAllDays(): Promise<string[]> {
   return storage.listDays();
+}
+
+/** Build a plain-text export of all entries for a given month ("YYYY-MM").
+ *  Returns an empty string if there are no entries for that month. */
+export async function exportMonth(monthStr: string): Promise<string> {
+  const days = (await storage.listDays())
+    .filter((d) => d.startsWith(monthStr))
+    .sort();
+
+  if (days.length === 0) return "";
+
+  const [year, month] = monthStr.split("-").map(Number);
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const lines: string[] = [`Paper Hearts — ${monthLabel}`, ""];
+
+  for (const dayId of days) {
+    const day = await storage.loadDay(dayId);
+    if (!day) continue;
+    const mine = day.entries.find((e) => e.author === "me");
+    const partner = day.entries.find((e) => e.author === "partner");
+    if (!mine && !partner) continue;
+
+    const label = formatDayLabel(dayId);
+    lines.push(label);
+    lines.push("─".repeat(label.length));
+    if (mine) {
+      lines.push("");
+      lines.push("You");
+      lines.push(mine.payload);
+    }
+    if (partner) {
+      lines.push("");
+      lines.push("Partner");
+      lines.push(partner.payload);
+    }
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 // ── History bundle transfer ──────────────────────────────────
