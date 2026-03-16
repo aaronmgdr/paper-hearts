@@ -156,8 +156,8 @@ export default function Settings() {
       // const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
       //   month: "long", year: "numeric",
       // });
-      const filename = `paper-hearts-${exportMonthVal()}.txt`;
-      const file = new File([content], filename, { type: "text/plain" });
+      const filename = `paper-hearts-${exportMonthVal()}.md`;
+      const file = new File([content], filename, { type: "text/markdown" });
 
       const url = URL.createObjectURL(file);
       const a = document.createElement("a");

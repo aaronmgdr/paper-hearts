@@ -543,7 +543,7 @@ export async function loadAllDays(): Promise<string[]> {
   return storage.listDays();
 }
 
-/** Build a plain-text export of all entries for a given month ("YYYY-MM").
+/** Build a Markdown export of all entries for a given month ("YYYY-MM").
  *  Returns an empty string if there are no entries for that month. */
 export async function exportMonth(monthStr: string): Promise<string> {
   const days = (await storage.listDays())
@@ -558,7 +558,7 @@ export async function exportMonth(monthStr: string): Promise<string> {
     year: "numeric",
   });
 
-  const lines: string[] = [`Paper Hearts — ${monthLabel}`, ""];
+  const lines: string[] = [`# Paper Hearts — ${monthLabel}`, ""];
 
   for (const dayId of days) {
     const day = await storage.loadDay(dayId);
@@ -567,17 +567,17 @@ export async function exportMonth(monthStr: string): Promise<string> {
     const partner = day.entries.find((e) => e.author === "partner");
     if (!mine && !partner) continue;
 
-    const label = formatDayLabel(dayId);
-    lines.push(label);
-    lines.push("─".repeat(label.length));
+    lines.push(`## ${formatDayLabel(dayId)}`);
     if (mine) {
       lines.push("");
-      lines.push("You");
+      lines.push(`**You**`);
+      lines.push("");
       lines.push(mine.payload);
     }
     if (partner) {
       lines.push("");
-      lines.push(partnerName());
+      lines.push(`**${partnerName()}**`);
+      lines.push("");
       lines.push(partner.payload);
     }
     lines.push("");
