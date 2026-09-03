@@ -1,7 +1,7 @@
 import { type ParentProps, Show, createSignal, onMount } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import { initialize, isReady, isPaired, fetchAndDecryptEntries, setupNetworkListeners } from "./lib/store";
-import { getDayId } from "./lib/dayid";
+import { getSyncSince } from "./lib/dayid";
 import { flushOutbox, listenForSyncMessages } from "./lib/sync";
 // import { registerPush } from "./lib/push";
 import UnlockScreen from "./screens/Unlock";
@@ -59,7 +59,7 @@ export default function App(props: ParentProps) {
           if (isPaired()) {
             listenForSyncMessages();
             // registerPush().catch(console.error); [Violation] Only request notification permission in response to a user gesture.
-            fetchAndDecryptEntries(getDayId()).catch(console.error);
+            fetchAndDecryptEntries(getSyncSince()).catch(console.error);
             flushOutbox().catch(console.error);
           }
         }} />}

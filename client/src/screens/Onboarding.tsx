@@ -12,7 +12,7 @@ import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
 
-type Step = "start" | "passphrase" | "relink-auth" | "show-qr" | "scan-qr" | "linked" | "offer-bundle" | "receive-bundle";
+type Step = "checking" | "start" | "passphrase" | "relink-auth" | "show-qr" | "scan-qr" | "linked" | "offer-bundle" | "receive-bundle";
 
   const qrCode: QRSVGProps = {
     value: "", // this is replaced dynamically, but we need to set it to something to avoid type errors
@@ -29,7 +29,10 @@ export default function Onboarding() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const relink = !!searchParams.relink;
-  const [step, setStep] = createSignal<Step>(searchParams.token ? "passphrase" : "start");
+  // With a token in the URL we don't yet know whether this device already has
+  // an identity, and that decides everything: a device with one must unlock and
+  // keep its existing key, not mint a fresh one. Resolve it in onMount.
+  const [step, setStep] = createSignal<Step>(searchParams.token ? "checking" : "start");
   const [role, setRole] = createSignal<"initiator" | "follower">(searchParams.token ? "follower" : "initiator");
   const [passphrase, setPassphrase] = createSignal("");
   const [confirm, setConfirm] = createSignal("");
@@ -44,6 +47,15 @@ export default function Onboarding() {
 
   onMount(async () => {
     setPrfSupported(await isPrfSupported());
+
+    if (searchParams.token) {
+      const { loadIdentity } = await import("../lib/storage");
+      const identity = await loadIdentity();
+      // Creating a new identity here would replace this device's key pair and
+      // silently discard its biometric enrolment and partner name. A device
+      // that already has an identity re-links with the key it already has.
+      setStep(identity ? "relink-auth" : "passphrase");
+    }
   });
 
   function chooseRole(r: "initiator" | "follower") {
@@ -253,9 +265,17 @@ export default function Onboarding() {
             </Show>
           </Match>
 
+          <Match when={step() === "checking"}>
+            <div />
+          </Match>
+
           <Match when={step() === "relink-auth"}>
             <h2 class={styles.heading}>Confirm it's you</h2>
-            <p class={styles.sub}>Verify your identity before generating a new link code.</p>
+            <p class={styles.sub}>
+              {role() === "follower"
+                ? "Unlock your diary to link it to your partner's new code."
+                : "Verify your identity before generating a new link code."}
+            </p>
             <Show
               when={unlockMethod() === "biometrics"}
               fallback={

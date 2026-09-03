@@ -1,7 +1,7 @@
 import { peekAll, remove } from "./outbox";
 import { signedHeaders } from "./relay";
 import { publicKey, secretKey, refreshPendingCount, fetchAndDecryptEntries, bumpEntriesVersion } from "./store";
-import { getDayId } from "./dayid";
+import { getSyncSince } from "./dayid";
 
 const API_ENTRIES = "/api/entries";
 
@@ -59,7 +59,7 @@ export function listenForSyncMessages(): void {
       flushOutbox().catch(console.error);
     }
     if (event.data?.type === "fetch-entries") {
-      fetchAndDecryptEntries(getDayId())
+      fetchAndDecryptEntries(getSyncSince())
         .then(() => bumpEntriesVersion())
         .catch(console.error);
     }
