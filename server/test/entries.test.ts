@@ -188,7 +188,7 @@ describe("GET /api/entries", () => {
 });
 
 describe("POST /api/entries/ack", () => {
-  test("acknowledges and deletes entries", async () => {
+  test("acknowledges an entry and leaves it collectable", async () => {
     const { initiator, follower } = await createPair();
     const dayId = todayDayId();
 
@@ -216,14 +216,27 @@ describe("POST /api/entries/ack", () => {
     );
 
     expect(ackRes.status).toBe(200);
-    expect(ackRes.data.deleted).toBe(1);
+    expect(ackRes.data.acknowledged).toBe(1);
 
+    // Acknowledging marks the row rather than destroying it. Deleting here
+    // would make a second phone on the same account impossible — whichever
+    // device polled first would take the entry away from the other.
     const fetchRes2 = await authGet(
       `/api/entries?since=${dayId}`,
       follower.publicKey,
       follower.secretKey
     );
-    expect(fetchRes2.data.entries).toHaveLength(0);
+    expect(fetchRes2.data.entries).toHaveLength(1);
+    expect(fetchRes2.data.entries[0].id).toBe(entryId);
+
+    // Acking twice is a no-op.
+    const ackAgain = await authPost(
+      "/api/entries/ack",
+      { entryIds: [entryId] },
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(ackAgain.data.acknowledged).toBe(0);
   });
 
   test("cannot ack own entries", async () => {
@@ -244,7 +257,7 @@ describe("POST /api/entries/ack", () => {
       initiator.secretKey
     );
 
-    expect(ackRes.data.deleted).toBe(0);
+    expect(ackRes.data.acknowledged).toBe(0);
   });
 
   test("rejects empty entryIds", async () => {

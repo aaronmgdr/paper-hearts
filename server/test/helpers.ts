@@ -74,6 +74,51 @@ export async function authPost(
   return { status: res.status, data: (await res.json()) as Record<string, any> };
 }
 
+/** Authenticated POST with no body — signs an empty body hash, sends nothing. */
+export async function authPostEmpty(
+  path: string,
+  publicKeyB64: string,
+  secretKey: Uint8Array
+) {
+  const headers = await signedHeaders("POST", path, null, publicKeyB64, secretKey);
+  const req = makeRequest("POST", path, undefined, headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
+  return { status: res.status, data: (await res.json()) as Record<string, any> };
+}
+
+/** Unauthenticated GET — for the routes a device with no identity has to call. */
+export async function anonGet(path: string) {
+  const req = makeRequest("GET", path);
+  const res = await handleApi(req, new URL(req.url).pathname);
+  return { status: res.status, data: (await res.json().catch(() => ({}))) as Record<string, any> };
+}
+
+/** Authenticated PUT helper */
+export async function authPut(
+  path: string,
+  body: object,
+  publicKeyB64: string,
+  secretKey: Uint8Array
+) {
+  const bodyStr = JSON.stringify(body);
+  const headers = await signedHeaders("PUT", path, bodyStr, publicKeyB64, secretKey);
+  const req = makeRequest("PUT", path, bodyStr, headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
+  return { status: res.status, data: (await res.json()) as Record<string, any> };
+}
+
+/** Authenticated DELETE helper */
+export async function authDelete(
+  path: string,
+  publicKeyB64: string,
+  secretKey: Uint8Array
+) {
+  const headers = await signedHeaders("DELETE", path, null, publicKeyB64, secretKey);
+  const req = makeRequest("DELETE", path, undefined, headers);
+  const res = await handleApi(req, new URL(req.url).pathname);
+  return { status: res.status };
+}
+
 /** Authenticated GET helper */
 export async function authGet(
   path: string,

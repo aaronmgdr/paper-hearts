@@ -39,12 +39,35 @@ export default function Privacy() {
         </section>
 
         <section>
-          <h2>There is no account recovery</h2>
+          <h2>How long the relay holds an entry</h2>
           <p>
-            Because we never hold your keys, we have no way to recover your data if
-            you lose access to your device. If both you and your partner lose your
-            devices or private keys, your entries are gone permanently. There is no
-            reset link. There is no support ticket that can recover them.
+            An encrypted entry stays on the relay for 30 days after it is written, then
+            it is deleted. It has to outlive the moment your partner first reads it, so
+            that a second phone on the same account can still collect it. The relay
+            holds ciphertext throughout and never holds the key.
+          </p>
+        </section>
+
+        <section>
+          <h2>Recovery is yours to arrange</h2>
+          <p>
+            We never hold your keys, so we cannot recover anything for you. There is no
+            reset link and no support ticket that can bring a diary back.
+          </p>
+          <p>
+            What we do offer is two ways to arrange it yourself, in Settings → Backup
+            &amp; recovery. A <strong>backup file</strong> is encrypted with a passphrase
+            you choose and saved wherever you keep it — it never touches our server. A{" "}
+            <strong>recovery code backup</strong> keeps an encrypted copy on the relay,
+            openable only with a code generated on your device and shown to you once. We
+            never see that code, and without it the copy cannot be read by us or anyone
+            else.
+          </p>
+          <p>
+            The trade is real: with recovery turned on, an encrypted copy of your diary
+            exists somewhere other than your phones, and anyone who finds your recovery
+            code can open it. If you would rather that copy not exist, leave it off —
+            and accept that losing every device loses the diary.
           </p>
         </section>
 

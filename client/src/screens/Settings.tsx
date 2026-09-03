@@ -374,6 +374,12 @@ export default function Settings() {
         <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner
         </A>
+        <A href="/device-link" class={styles.item}>
+          Add another phone
+        </A>
+        <A href="/recovery" class={styles.item}>
+          Backup &amp; recovery
+        </A>
         <A href="/privacy" class={styles.item}>
           <span>Paper Hearts Privacy</span>
           <span class="meta">v1.0.0-{__GIT_HASH__}</span>

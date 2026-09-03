@@ -109,3 +109,21 @@ code {
     border-radius: 8px;
     border: 1px solid var(--blush);
 }
+.linkButton {
+  background: none;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  color: var(--dusty-mauve);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: var(--space-2);
+  min-height: 44px;
+}
+
+.linkButton:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}

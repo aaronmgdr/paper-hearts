@@ -165,3 +165,107 @@ export function decryptSecretKeyRaw(
     wrappingKey
   );
 }
+
+// ── Anonymous sealed boxes (device link) ────────────────────
+
+export interface BoxKeyPair {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+}
+
+/**
+ * A throwaway X25519 key pair, used once to receive an identity bundle on a
+ * new device. Distinct from the Ed25519 identity key: it exists for the
+ * duration of one transfer and is never stored.
+ */
+export function generateBoxKeyPair(): BoxKeyPair {
+  const kp = sodium.crypto_box_keypair();
+  return { publicKey: kp.publicKey, secretKey: kp.privateKey };
+}
+
+/**
+ * Seal a message to a public key. The sender is anonymous and cannot open its
+ * own ciphertext — which is what we want for a one-way handoff through a relay
+ * that must not be able to read it.
+ */
+export function seal(plaintext: string, recipientPublicKey: Uint8Array): Uint8Array {
+  return sodium.crypto_box_seal(sodium.from_string(plaintext), recipientPublicKey);
+}
+
+/** Open a sealed box. Throws if it wasn't sealed to this key pair. */
+export function openSealed(sealed: Uint8Array, keys: BoxKeyPair): string {
+  return sodium.to_string(
+    sodium.crypto_box_seal_open(sealed, keys.publicKey, keys.secretKey)
+  );
+}
+
+/**
+ * Six digits derived from both halves of a device-link handshake, shown on
+ * each phone. A relay that swapped in a key of its own to read the bundle
+ * would produce a different number on the two screens.
+ */
+export function pairingVerificationCode(token: string, ephemeralPublicKeyB64: string): string {
+  const digest = sodium.crypto_generichash(
+    8,
+    sodium.from_string(`paper-hearts/device-link/v1\n${token}\n${ephemeralPublicKeyB64}`),
+    null
+  );
+  let n = 0;
+  for (const byte of digest.slice(0, 4)) n = (n * 256 + byte) % 1_000_000;
+  return String(n).padStart(6, "0");
+}
+
+// ── Recovery codes ──────────────────────────────────────────
+
+// Crockford-style base32, minus I L O U — the characters people misread when
+// copying a code off paper months after they wrote it down.
+const RECOVERY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const RECOVERY_BYTES = 20; // 160 bits
+
+/** A fresh recovery code, grouped for transcription: XXXX-XXXX-… (8 groups). */
+export function generateRecoveryCode(): string {
+  const bytes = sodium.randombytes_buf(RECOVERY_BYTES);
+  let out = "";
+  for (const byte of bytes) {
+    out += RECOVERY_ALPHABET[byte >> 3];
+  }
+  // 20 bytes -> 20 chars at 5 bits each; regroup into fours for readability.
+  return (out.match(/.{1,4}/g) || []).join("-");
+}
+
+/** Strip formatting and fold look-alike characters back to canonical form. */
+export function normalizeRecoveryCode(code: string): string {
+  return code
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "")
+    .replace(/[IL]/g, "1")
+    .replace(/O/g, "0")
+    .replace(/U/g, "V");
+}
+
+export interface RecoveryKeys {
+  /** Names the backup on the relay. Reveals nothing about the encryption key. */
+  locator: string;
+  /** Encrypts the backup. Never leaves the device. */
+  key: Uint8Array;
+}
+
+/**
+ * Split a recovery code into the two independent values a backup needs. They
+ * come from separate keyed hashes with different context strings, so holding
+ * the locator — which the relay does — says nothing about the key.
+ */
+export function deriveRecoveryKeys(code: string): RecoveryKeys {
+  const material = sodium.from_string(normalizeRecoveryCode(code));
+  const locator = sodium.crypto_generichash(
+    32,
+    sodium.from_string("paper-hearts/backup-locator/v1"),
+    material
+  );
+  const key = sodium.crypto_generichash(
+    sodium.crypto_secretbox_KEYBYTES,
+    sodium.from_string("paper-hearts/backup-key/v1"),
+    material
+  );
+  return { locator: sodium.to_base64(locator, sodium.base64_variants.URLSAFE_NO_PADDING), key };
+}
