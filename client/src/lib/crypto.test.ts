@@ -112,3 +112,77 @@ describe("toBase64 / fromBase64", () => {
     expect(fromBase64(toBase64(bytes))).toEqual(bytes);
   });
 });
+
+describe("sealed boxes (device link)", () => {
+  test("only the holder of the throwaway key can open the bundle", async () => {
+    const { generateBoxKeyPair, seal, openSealed } = await import("./crypto");
+    const recipient = generateBoxKeyPair();
+    const eavesdropper = generateBoxKeyPair();
+
+    const sealed = seal(JSON.stringify({ secretKey: "abc" }), recipient.publicKey);
+
+    expect(JSON.parse(openSealed(sealed, recipient)).secretKey).toBe("abc");
+    expect(() => openSealed(sealed, eavesdropper)).toThrow();
+  });
+
+  test("verification code depends on both halves of the handshake", async () => {
+    const { pairingVerificationCode, generateBoxKeyPair, toBase64 } = await import("./crypto");
+    const a = toBase64(generateBoxKeyPair().publicKey);
+    const b = toBase64(generateBoxKeyPair().publicKey);
+
+    // Stable for the same inputs — the two phones must agree.
+    expect(pairingVerificationCode("token", a)).toBe(pairingVerificationCode("token", a));
+    expect(pairingVerificationCode("token", a)).toMatch(/^\d{6}$/);
+
+    // A relay swapping in its own key changes the number on one screen.
+    expect(pairingVerificationCode("token", a)).not.toBe(pairingVerificationCode("token", b));
+    expect(pairingVerificationCode("token", a)).not.toBe(pairingVerificationCode("other", a));
+  });
+});
+
+describe("recovery codes", () => {
+  test("a fresh code is grouped and unique", async () => {
+    const { generateRecoveryCode } = await import("./crypto");
+    const code = generateRecoveryCode();
+    expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4})+$/);
+    expect(generateRecoveryCode()).not.toBe(code);
+  });
+
+  test("locator and key are independent and neither leaks the other", async () => {
+    const { generateRecoveryCode, deriveRecoveryKeys, toBase64 } = await import("./crypto");
+    const code = generateRecoveryCode();
+    const { locator, key } = deriveRecoveryKeys(code);
+
+    expect(locator.length).toBeGreaterThan(16);
+    expect(key.length).toBe(32);
+    // The relay is given the locator; it must not be the encryption key.
+    expect(locator).not.toBe(toBase64(key));
+  });
+
+  test("derivation survives how people actually transcribe a code", async () => {
+    const { deriveRecoveryKeys } = await import("./crypto");
+    const canonical = deriveRecoveryKeys("A1B2-C3D4");
+
+    // Spacing, case, and the classic look-alike slips all land on the same keys.
+    expect(deriveRecoveryKeys("a1b2 c3d4").locator).toBe(canonical.locator);
+    expect(deriveRecoveryKeys("A1B2C3D4").locator).toBe(canonical.locator);
+    expect(deriveRecoveryKeys("AIB2-C3D4").locator).toBe(canonical.locator); // I -> 1
+  });
+
+  test("a different code opens nothing", async () => {
+    const { generateRecoveryCode, deriveRecoveryKeys } = await import("./crypto");
+    const a = deriveRecoveryKeys(generateRecoveryCode());
+    const b = deriveRecoveryKeys(generateRecoveryCode());
+    expect(a.locator).not.toBe(b.locator);
+  });
+
+  test("a bundle encrypted under a recovery code round-trips", async () => {
+    const { generateRecoveryCode, deriveRecoveryKeys, encrypt, decrypt } = await import("./crypto");
+    const code = generateRecoveryCode();
+    const bundle = JSON.stringify({ v: 1, days: [{ dayId: "2026-09-03" }] });
+
+    const sealed = encrypt(bundle, deriveRecoveryKeys(code).key);
+    expect(decrypt(sealed, deriveRecoveryKeys(code).key)).toBe(bundle);
+    expect(() => decrypt(sealed, deriveRecoveryKeys(generateRecoveryCode()).key)).toThrow();
+  });
+});

@@ -1,6 +1,7 @@
 import sql from "../db";
 import { verifyRequest, AuthError } from "../auth";
 import { notifyPartner } from "../push";
+import { ENTRY_RETENTION_DAYS } from "../retention";
 
 
 /**
@@ -96,13 +97,16 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
 
   const partnerKey = partners[0].public_key;
 
-  // Fetch unacked entries from partner
+  // Everything from the partner inside the retention window, acknowledged or
+  // not. Filtering on acked_at would hide an entry from a second device on the
+  // same account as soon as the first device collected it. Clients key partner
+  // entries by day and overwrite in place, so re-delivery is a no-op for them.
   const entries = await sql`
     SELECT id, day_id, payload, fetched_at FROM entries
     WHERE pair_id = ${auth.pairId}
       AND author_key = ${partnerKey}
       AND day_id >= ${since}
-      AND acked_at IS NULL
+      AND created_at > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
     ORDER BY day_id ASC
   `;
 
@@ -130,7 +134,11 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
 
 /**
  * POST /api/entries/ack
- * Authenticated. Confirm receipt of entries — server deletes them.
+ * Authenticated. Confirm receipt of entries — marks them acknowledged.
+ *
+ * Acknowledging no longer deletes: the retention sweep does that, once the
+ * window has passed and every device on the account has had a chance to
+ * collect. See ENTRY_RETENTION_DAYS.
  */
 export async function ackEntries(req: Request, path: string): Promise<Response> {
   const bodyBytes = new Uint8Array(await req.clone().arrayBuffer());
@@ -166,15 +174,16 @@ export async function ackEntries(req: Request, path: string): Promise<Response> 
 
   const partnerKey = partners[0].public_key;
 
-  // Delete entries that belong to this pair and were authored by partner
-  const deleted = await sql`
-    DELETE FROM entries
+  // Only entries in this pair, authored by the partner
+  const acked = await sql`
+    UPDATE entries SET acked_at = now()
     WHERE id = ANY(${entryIds})
       AND pair_id = ${auth.pairId}
       AND author_key = ${partnerKey}
+      AND acked_at IS NULL
     RETURNING id
   `;
 
-  console.log(`[ackEntries] deleted ${deleted.length}`);
-  return Response.json({ deleted: deleted.length });
+  console.log(`[ackEntries] acknowledged ${acked.length}`);
+  return Response.json({ acknowledged: acked.length });
 }

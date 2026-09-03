@@ -1,6 +1,7 @@
 import { join } from "path";
 import { handleApi } from "./app";
 import { handleWsAuth, handleWsCollect, handleWsBundle, removeWaiting, type WsData } from "./pairing";
+import { startRetentionSweep } from "./retention";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const CLIENT_DIST = join(import.meta.dir, "../client/dist");
@@ -10,19 +11,48 @@ const requestCounts = new Map<string, { count: number; resetAt: number }>();
 const THROTTLE_LIMIT = 60;
 const THROTTLE_WINDOW_MS = 60 * 1000;
 
-function checkThrottle(publicKey: string | null): boolean {
-  if (!publicKey) return true;
+// Unauthenticated routes have no public key to count against, so they are
+// counted per IP instead. Backup restore in particular is a lookup by a secret
+// locator and must not be free to hammer.
+const anonCounts = new Map<string, { count: number; resetAt: number }>();
+const ANON_THROTTLE_LIMIT = 20;
+
+function countAgainst(
+  bucket: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  limit: number
+): boolean {
   const now = Date.now();
-  const entry = requestCounts.get(publicKey);
+  const entry = bucket.get(key);
 
   if (!entry || now > entry.resetAt) {
-    requestCounts.set(publicKey, { count: 1, resetAt: now + THROTTLE_WINDOW_MS });
+    bucket.set(key, { count: 1, resetAt: now + THROTTLE_WINDOW_MS });
     return true;
   }
 
   entry.count++;
-  return entry.count <= THROTTLE_LIMIT;
+  return entry.count <= limit;
 }
+
+function checkThrottle(publicKey: string | null): boolean {
+  if (!publicKey) return true;
+  return countAgainst(requestCounts, publicKey, THROTTLE_LIMIT);
+}
+
+function checkAnonThrottle(ip: string | null): boolean {
+  return countAgainst(anonCounts, ip || "unknown", ANON_THROTTLE_LIMIT);
+}
+
+// Both maps are unbounded otherwise — a stream of distinct keys or IPs would
+// grow them without limit.
+setInterval(() => {
+  const now = Date.now();
+  for (const bucket of [requestCounts, anonCounts]) {
+    for (const [key, entry] of bucket) {
+      if (now > entry.resetAt) bucket.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
 
 const server = Bun.serve<WsData>({
   port: PORT,
@@ -46,6 +76,14 @@ const server = Bun.serve<WsData>({
       // Throttle check for authenticated routes
       if (publicKey && !checkThrottle(publicKey)) {
         console.log(`← 429 throttled [${keyShort}]`);
+        return Response.json(
+          { error: "Too many requests" },
+          { status: 429 }
+        );
+      }
+
+      if (!publicKey && !checkAnonThrottle(server.requestIP(req)?.address ?? null)) {
+        console.log(`← 429 throttled [anon]`);
         return Response.json(
           { error: "Too many requests" },
           { status: 429 }
@@ -116,5 +154,7 @@ async function serveStatic(path: string): Promise<Response> {
 
   return new Response("Not Found", { status: 404 });
 }
+
+startRetentionSweep();
 
 console.log(`Paper Hearts relay listening on port ${PORT}`);

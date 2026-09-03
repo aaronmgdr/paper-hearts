@@ -261,6 +261,9 @@ export default function Onboarding() {
               </Show>
             </div>
              <Show when={!relink}>
+              <button class={styles.linkButton} onClick={() => navigate("/restore")}>
+                I already have a diary to restore
+              </button>
               <small class={styles.sub}>Wait until you and your partner have a moment together to continue.</small>
             </Show>
           </Match>

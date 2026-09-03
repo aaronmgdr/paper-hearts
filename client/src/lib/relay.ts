@@ -258,3 +258,87 @@ export async function subscribePush(
   const res = await fetch(path, { method: "POST", headers, body });
   return { status: res.status, data: await res.json() };
 }
+
+// ── Device link (moving an account to another phone) ────────
+
+export async function startDeviceLink(publicKey: Uint8Array, secretKey: Uint8Array) {
+  const path = `${BASE}/device-link/start`;
+  const headers = await signedHeaders("POST", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "POST", headers });
+  return { status: res.status, data: await res.json() };
+}
+
+export async function claimDeviceLink(token: string, ephemeralPublicKeyB64: string) {
+  const res = await fetch(`${BASE}/device-link/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, ephemeralPublicKey: ephemeralPublicKeyB64 }),
+  });
+  return { status: res.status, data: await res.json() };
+}
+
+export async function getDeviceLink(
+  token: string,
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/device-link?token=${encodeURIComponent(token)}`;
+  const headers = await signedHeaders("GET", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "GET", headers });
+  return { status: res.status, data: await res.json() };
+}
+
+export async function putDeviceLinkPayload(
+  token: string,
+  payloadB64: string,
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/device-link/payload`;
+  const body = JSON.stringify({ token, payload: payloadB64 });
+  const headers = await signedHeaders("POST", path, body, publicKey, secretKey);
+  const res = await fetch(path, { method: "POST", headers, body });
+  return { status: res.status, data: await res.json() };
+}
+
+export async function getDeviceLinkPayload(token: string) {
+  const res = await fetch(
+    `${BASE}/device-link/payload?token=${encodeURIComponent(token)}`
+  );
+  return { status: res.status, data: await res.json() };
+}
+
+// ── Recovery backup ─────────────────────────────────────────
+
+export async function putBackup(
+  locator: string,
+  payloadB64: string,
+  publicKey: Uint8Array,
+  secretKey: Uint8Array
+) {
+  const path = `${BASE}/backup`;
+  const body = JSON.stringify({ locator, payload: payloadB64 });
+  const headers = await signedHeaders("PUT", path, body, publicKey, secretKey);
+  const res = await fetch(path, { method: "PUT", headers, body });
+  return { status: res.status, data: await res.json() };
+}
+
+/** Unauthenticated on purpose — after losing every phone there is no key left to sign with. */
+export async function getBackup(locator: string) {
+  const res = await fetch(`${BASE}/backup?locator=${encodeURIComponent(locator)}`);
+  return { status: res.status, data: await res.json() };
+}
+
+export async function getBackupStatus(publicKey: Uint8Array, secretKey: Uint8Array) {
+  const path = `${BASE}/backup/status`;
+  const headers = await signedHeaders("GET", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "GET", headers });
+  return { status: res.status, data: await res.json() };
+}
+
+export async function deleteBackup(publicKey: Uint8Array, secretKey: Uint8Array) {
+  const path = `${BASE}/backup`;
+  const headers = await signedHeaders("DELETE", path, null, publicKey, secretKey);
+  const res = await fetch(path, { method: "DELETE", headers });
+  return res.status;
+}

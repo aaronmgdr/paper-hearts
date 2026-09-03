@@ -44,7 +44,7 @@ async function opfsRead(dir: FileSystemDirectoryHandle, name: string): Promise<s
 
 async function opfsClear(): Promise<void> {
   const root = await navigator.storage.getDirectory();
-  for (const name of ["identity", "entries"]) {
+  for (const name of ["identity", "entries", "settings"]) {
     try { await root.removeEntry(name, { recursive: true }); } catch { /* already gone */ }
   }
 }
@@ -197,6 +197,20 @@ export async function loadDay(dayId: string): Promise<DayFile | null> {
 export async function listDays(): Promise<string[]> {
   if (await useOpfs()) return opfsListDays();
   return idbListDays();
+}
+
+// ── Settings (small local key/value, never leaves the device) ─
+
+function settingFile(key: string): string {
+  return `${encodeURIComponent(key)}.json`;
+}
+
+export async function saveSetting(key: string, value: string): Promise<void> {
+  await write("settings", settingFile(key), value);
+}
+
+export async function loadSetting(key: string): Promise<string | null> {
+  return read("settings", settingFile(key));
 }
 
 /** Delete all local data. */

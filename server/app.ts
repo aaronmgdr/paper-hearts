@@ -2,6 +2,14 @@ import { initiate, join as joinPair, pairStatus, deleteAccount } from "./routes/
 import { createEntry, getEntries, ackEntries } from "./routes/entries";
 import { subscribePush, testPush } from "./routes/push";
 import { uploadTransfer, downloadTransfer } from "./routes/transfer";
+import {
+  startDeviceLink,
+  claimDeviceLink,
+  getDeviceLink,
+  putDeviceLinkPayload,
+  getDeviceLinkPayload,
+} from "./routes/devicelink";
+import { putBackup, getBackup, backupStatus, deleteBackup } from "./routes/backup";
 
 export async function handleApi(req: Request, path: string): Promise<Response> {
   // Unauthenticated onboarding routes
@@ -46,6 +54,37 @@ export async function handleApi(req: Request, path: string): Promise<Response> {
   }
   if (path === "/api/transfer" && req.method === "GET") {
     return downloadTransfer(req, path);
+  }
+
+  // Moving an account to a second phone
+  if (path === "/api/device-link/start" && req.method === "POST") {
+    return startDeviceLink(req, path);
+  }
+  if (path === "/api/device-link/claim" && req.method === "POST") {
+    return claimDeviceLink(req);
+  }
+  if (path === "/api/device-link/payload" && req.method === "POST") {
+    return putDeviceLinkPayload(req, path);
+  }
+  if (path === "/api/device-link/payload" && req.method === "GET") {
+    return getDeviceLinkPayload(req);
+  }
+  if (path === "/api/device-link" && req.method === "GET") {
+    return getDeviceLink(req, path + new URL(req.url).search);
+  }
+
+  // Recovery backups
+  if (path === "/api/backup/status" && req.method === "GET") {
+    return backupStatus(req, path);
+  }
+  if (path === "/api/backup" && req.method === "PUT") {
+    return putBackup(req, path);
+  }
+  if (path === "/api/backup" && req.method === "GET") {
+    return getBackup(req);
+  }
+  if (path === "/api/backup" && req.method === "DELETE") {
+    return deleteBackup(req, path);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

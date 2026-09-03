@@ -496,6 +496,9 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
   await refreshPendingCount();
   requestBackgroundSync().catch(console.error);
   flushOutbox().catch(console.error);
+  // Imported lazily: backup.ts imports this module, and a static import here
+  // would close the cycle at module-evaluation time.
+  import("./backup").then((m) => m.refreshRecoveryBackup()).catch(console.error);
 }
 
 export async function updateEntry(text: string, dayId: string): Promise<void> {
@@ -530,6 +533,9 @@ export async function updateEntry(text: string, dayId: string): Promise<void> {
   await refreshPendingCount();
   requestBackgroundSync().catch(console.error);
   flushOutbox().catch(console.error);
+  // Imported lazily: backup.ts imports this module, and a static import here
+  // would close the cycle at module-evaluation time.
+  import("./backup").then((m) => m.refreshRecoveryBackup()).catch(console.error);
 }
 
 export async function fetchAndDecryptEntries(since: string): Promise<void> {
@@ -782,4 +788,109 @@ export async function breakupAndForget(): Promise<void> {
   setPendingCount(0);
   window.location.assign("/onboarding");
   window.location.reload();
+}
+
+// ── Account bundles ─────────────────────────────────────────
+
+/**
+ * Everything needed to be this account on another device: the identity key
+ * pair, who it is paired with, and the diary itself.
+ *
+ * Entries travel as plaintext inside the bundle. That is not a downgrade —
+ * they are stored decrypted on each device already, and the bundle as a whole
+ * is sealed (device link) or encrypted with a key derived from a recovery code
+ * or passphrase (backup) before it goes anywhere.
+ */
+export interface AccountBundle {
+  v: 1;
+  publicKey: string;
+  secretKey: string;
+  pairId: string | null;
+  partnerPublicKey: string | null;
+  partnerName?: string;
+  days: Array<{ dayId: string; entries: storage.StoredEntry[] }>;
+  exportedAt: string;
+}
+
+/** Collect this device's identity and diary. Requires the diary to be unlocked. */
+export async function buildAccountBundle(): Promise<AccountBundle> {
+  const pk = publicKey();
+  const sk = secretKey();
+  if (!pk || !sk) throw new Error("Unlock your diary first");
+
+  const identity = await storage.loadIdentity();
+  if (!identity) throw new Error("No identity on this device");
+
+  const crypto = await loadCrypto();
+  const days: AccountBundle["days"] = [];
+  for (const dayId of await storage.listDays()) {
+    const day = await storage.loadDay(dayId);
+    if (day && day.entries.length > 0) days.push({ dayId, entries: day.entries });
+  }
+
+  return {
+    v: 1,
+    publicKey: crypto.toBase64(pk),
+    secretKey: crypto.toBase64(sk),
+    pairId: identity.pairId,
+    partnerPublicKey: identity.partnerPublicKey,
+    partnerName: identity.partnerName,
+    days,
+    exportedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Become the account in a bundle on this device.
+ *
+ * Days are merged rather than replaced: restoring onto a phone that already
+ * has entries — a partial restore, or a second device that has been writing
+ * offline — must not throw away what is already here.
+ */
+export async function installAccountBundle(
+  bundle: AccountBundle,
+  passphrase: string
+): Promise<void> {
+  if (bundle?.v !== 1) throw new Error("This backup was made by a different version of Paper Hearts");
+  if (!bundle.publicKey || !bundle.secretKey) throw new Error("Backup is missing its keys");
+
+  const crypto = await loadCrypto();
+  await crypto.init();
+
+  const sk = crypto.fromBase64(bundle.secretKey);
+  const pk = crypto.fromBase64(bundle.publicKey);
+  const encKey = crypto.encryptSecretKey(sk, passphrase);
+
+  await storage.saveIdentity({
+    publicKey: bundle.publicKey,
+    encryptedKey: encryptedKeyToStorable(encKey, crypto),
+    unlockMethod: "passphrase",
+    pairId: bundle.pairId,
+    partnerPublicKey: bundle.partnerPublicKey,
+    ...(bundle.partnerName ? { partnerName: bundle.partnerName } : {}),
+  });
+
+  for (const { dayId, entries } of bundle.days ?? []) {
+    const existing = (await storage.loadDay(dayId)) || { entries: [] };
+    for (const entry of entries) {
+      const idx = existing.entries.findIndex((e) => e.author === entry.author);
+      if (idx >= 0) {
+        // Same author, same day: keep whichever was written last.
+        if (entry.timestamp >= existing.entries[idx].timestamp) existing.entries[idx] = entry;
+      } else {
+        existing.entries.push(entry);
+      }
+    }
+    await storage.saveDay(dayId, existing);
+  }
+
+  setPublicKey(pk);
+  setSecretKey(sk);
+  setUnlockMethod("passphrase");
+  setIsPaired(!!bundle.pairId && !!bundle.partnerPublicKey);
+  if (bundle.partnerPublicKey) {
+    setSharedSecret(crypto.computeSharedSecret(sk, pk, crypto.fromBase64(bundle.partnerPublicKey)));
+  }
+  if (bundle.partnerName) setPartnerNameSignal(bundle.partnerName);
+  bumpEntriesVersion();
 }
