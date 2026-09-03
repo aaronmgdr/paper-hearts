@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
-import { getDayId, formatDayLabel } from "./dayid";
+import { getSyncSince, formatDayLabel } from "./dayid";
 import { enqueue, replaceForDayId, peekAll } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
 import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
@@ -39,7 +39,7 @@ export function setupNetworkListeners(): void {
     console.info("Network reconnected, flushing outbox and refreshing entries");
     if (isPaired()) {
       flushOutbox().catch(console.error);
-      fetchAndDecryptEntries(getDayId())
+      fetchAndDecryptEntries(getSyncSince())
         .then(() => bumpEntriesVersion())
         .catch(console.error);
     }
@@ -410,6 +410,52 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
   if (identity) {
     identity.partnerPublicKey = partnerPublicKeyB64;
     await storage.saveIdentity(identity);
+  }
+}
+
+// ── Connection health ───────────────────────────────────────
+
+export type ConnectionHealth =
+  | { state: "ok" }
+  | { state: "not-paired" }
+  | { state: "locked" }
+  | { state: "offline" }
+  | { state: "no-partner-on-relay" }
+  | { state: "key-mismatch"; localKey: string; relayKey: string }
+  | { state: "error"; message: string };
+
+/**
+ * Ask the relay who it thinks our partner is and compare with what this device
+ * stored. A pairing can fail in two ways that both look identical on screen —
+ * the relay has us alone in a pair, or it has us pointed at a different key
+ * than the one we encrypt to. Either way every sync returns nothing and no
+ * error is ever surfaced, so this is the only way to tell them apart.
+ */
+export async function checkConnectionHealth(): Promise<ConnectionHealth> {
+  const pk = publicKey();
+  const sk = secretKey();
+  if (!pk || !sk) return { state: "locked" };
+  if (!navigator.onLine) return { state: "offline" };
+
+  const identity = await storage.loadIdentity();
+  if (!identity?.pairId || !identity.partnerPublicKey) return { state: "not-paired" };
+
+  try {
+    const { status, data } = await relay.getPairStatus(pk, sk);
+    if (status !== 200) {
+      return { state: "error", message: data?.error || `Relay returned ${status}` };
+    }
+    if (!data.paired) return { state: "no-partner-on-relay" };
+    if (data.partnerPublicKey !== identity.partnerPublicKey) {
+      return {
+        state: "key-mismatch",
+        localKey: identity.partnerPublicKey,
+        relayKey: data.partnerPublicKey,
+      };
+    }
+    return { state: "ok" };
+  } catch (e) {
+    return { state: "error", message: e instanceof Error ? e.message : String(e) };
   }
 }
 

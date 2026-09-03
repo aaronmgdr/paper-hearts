@@ -14,6 +14,21 @@ export function getDayId(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * How far back a background sync looks. The relay filters `day_id >= since`,
+ * so syncing from today alone never returns an entry your partner wrote for an
+ * earlier day — a late-night entry that lands after the pivot, or anything
+ * written while you were offline, stays invisible.
+ */
+export const SYNC_LOOKBACK_DAYS = 7;
+
+/** The dayId a background sync should fetch from. */
+export function getSyncSince(date: Date = new Date()): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() - SYNC_LOOKBACK_DAYS);
+  return getDayId(d);
+}
+
 /** Format a dayId for display, e.g. "Monday, Feb 17" */
 export function formatDayLabel(dayId: string): string {
   const d = new Date(dayId + "T12:00:00");

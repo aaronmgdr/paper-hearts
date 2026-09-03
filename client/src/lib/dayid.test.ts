@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { getDayId, formatDayLabel } from "./dayid";
+import { getDayId, getSyncSince, SYNC_LOOKBACK_DAYS, formatDayLabel } from "./dayid";
 
 describe("getDayId", () => {
   test("returns today's date after 11 AM", () => {
@@ -41,5 +41,32 @@ describe("formatDayLabel", () => {
     expect(label).toMatch(/Thursday/);
     expect(label).toMatch(/Jan/);
     expect(label).toMatch(/1/);
+  });
+});
+
+describe("getSyncSince", () => {
+  // The relay filters `day_id >= since`. Syncing from today alone means an
+  // entry your partner wrote for an earlier day — late at night, or while you
+  // were offline — is never returned by a background sync.
+  test("looks back a full window from today's dayId", () => {
+    const d = new Date("2026-02-23T12:00:00");
+    expect(getSyncSince(d)).toBe("2026-02-16");
+    expect(getDayId(d)).toBe("2026-02-23");
+  });
+
+  test("respects the night-owl pivot", () => {
+    const d = new Date("2026-02-23T02:00:00");
+    expect(getDayId(d)).toBe("2026-02-22");
+    expect(getSyncSince(d)).toBe("2026-02-15");
+  });
+
+  test("crosses a month boundary", () => {
+    expect(getSyncSince(new Date("2026-03-03T12:00:00"))).toBe("2026-02-24");
+  });
+
+  test("is always at or before today", () => {
+    expect(SYNC_LOOKBACK_DAYS).toBeGreaterThan(0);
+    const now = new Date();
+    expect(getSyncSince(now) <= getDayId(now)).toBe(true);
   });
 });

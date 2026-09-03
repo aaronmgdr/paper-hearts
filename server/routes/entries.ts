@@ -45,6 +45,7 @@ export async function createEntry(req: Request, path: string): Promise<Response>
     VALUES (${auth.publicKey}, ${auth.pairId}, ${dayId}, ${payloadBytes})
     ON CONFLICT (author_key, day_id) DO UPDATE
       SET payload     = EXCLUDED.payload,
+          pair_id     = EXCLUDED.pair_id,
           updated_at  = now(),
           fetched_at  = NULL,
           acked_at    = NULL

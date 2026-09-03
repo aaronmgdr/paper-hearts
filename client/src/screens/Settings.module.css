@@ -111,6 +111,30 @@
   margin: 0;
 }
 
+.healthPanel {
+  padding: var(--space-2) 0 var(--space-3);
+  border-bottom: 1px solid var(--veiled);
+}
+
+.healthLine {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+}
+
+.healthDetail {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 var(--space-2);
+  color: var(--dusty-mauve);
+}
+
+.healthBad {
+  color: var(--blush);
+  font-weight: 600;
+}
+
 .danger {
   margin-top: var(--space-5);
   padding-bottom: calc(56px + var(--space-3));

@@ -50,6 +50,13 @@ export async function initiate(req: Request): Promise<Response> {
             push_auth = NULL
     `;
 
+    // Invalidate this initiator's older unconsumed tokens. Each initiate creates
+    // a fresh pair and moves the initiator into it, so a code generated a minute
+    // ago points at a pair the initiator has already left. Redeeming it would
+    // silently strand both sides in different pairs.
+    // @ts-expect-error — same
+    await tx`DELETE FROM relay_tokens WHERE initiator_key = ${publicKey} AND NOT consumed`;
+
     // Generate cryptographically random relay token
     const tokenBytes = sodium.randombytes_buf(32);
     const token = sodium.to_base64(tokenBytes, sodium.base64_variants.URLSAFE_NO_PADDING);
@@ -129,6 +136,26 @@ export async function join(req: Request): Promise<Response> {
     return Response.json({ error: "Cannot join your own pair" }, { status: 400 });
   }
 
+  // Resolve the pair from where the initiator actually is right now, not from
+  // the pair recorded on the token. The two diverge whenever the initiator
+  // generated more than one code, and joining the token's stale pair leaves
+  // both people alone in separate pairs — which reads as "paired" on both
+  // devices while every sync silently returns zero entries.
+  const initiators = await sql`
+    SELECT pair_id FROM users WHERE public_key = ${tokenRow.initiator_key}
+  `;
+  if (initiators.length === 0) {
+    console.log(`[join] REJECTED: initiator no longer registered`);
+    return Response.json(
+      { error: "Your partner's device is no longer registered. Ask them for a new code." },
+      { status: 410 }
+    );
+  }
+  const pairId = initiators[0].pair_id as string;
+  if (pairId !== tokenRow.pair_id) {
+    console.log(`[join] token pair ${tokenRow.pair_id} is stale; using initiator's current pair ${pairId}`);
+  }
+
   // Register follower and consume token atomically in a transaction.
   // The UPDATE uses AND NOT consumed to guard against TOCTOU races where two
   // concurrent requests both read consumed=false before either writes.
@@ -144,7 +171,7 @@ export async function join(req: Request): Promise<Response> {
     // @ts-expect-error — same
     await tx`
       INSERT INTO users (public_key, pair_id)
-      VALUES (${publicKey}, ${tokenRow.pair_id})
+      VALUES (${publicKey}, ${pairId})
       ON CONFLICT (public_key) DO UPDATE
         SET pair_id = EXCLUDED.pair_id,
             push_endpoint = NULL,
@@ -152,8 +179,20 @@ export async function join(req: Request): Promise<Response> {
             push_auth = NULL
     `;
 
+    // Drop both parties' entries still sitting in a pair they have left. They
+    // are undeliverable: the recipient's shared secret has changed, so decrypt
+    // throws, the id never reaches the ack list, and the blob would be
+    // re-fetched forever. Each author keeps their own local copy, and the
+    // history bundle backfills the other side.
+    // @ts-expect-error — same
+    await tx`
+      DELETE FROM entries
+      WHERE author_key IN (${publicKey}, ${tokenRow.initiator_key})
+        AND pair_id != ${pairId}
+    `;
+
     return {
-      pairId: tokenRow.pair_id,
+      pairId,
       partnerPublicKey: tokenRow.initiator_key,
     };
   });

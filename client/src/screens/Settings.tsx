@@ -3,7 +3,8 @@ import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
-import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, savePartnerName, unlockMethod, publicKey, partnerName } from "../lib/store";
+import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, savePartnerName, checkConnectionHealth, unlockMethod, publicKey, partnerName } from "../lib/store";
+import type { ConnectionHealth } from "../lib/store";
 import styles from "./Settings.module.css";
 
 export default function Settings() {
@@ -45,6 +46,16 @@ export default function Settings() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
+  // Connection health
+  const [health, setHealth] = createSignal<ConnectionHealth | null>(null);
+  const [healthLoading, setHealthLoading] = createSignal(false);
+
+  async function runHealthCheck() {
+    setHealthLoading(true);
+    setHealth(await checkConnectionHealth());
+    setHealthLoading(false);
+  }
+
   const [showExport, setShowExport] = createSignal(false);
   const [exportMonthVal, setExportMonthVal] = createSignal(currentMonth());
   const [exportLoading, setExportLoading] = createSignal(false);
@@ -310,6 +321,55 @@ export default function Settings() {
               <p class={styles.exportEmpty}>No entries for this month.</p>
             </Show>
           </div>
+        </Show>
+        <button class={styles.item} onClick={runHealthCheck} disabled={healthLoading()}>
+          <span>Check connection</span>
+          <span class="meta">{healthLoading() ? "Checking..." : ""}</span>
+        </button>
+        <Show when={health()}>
+          {(h) => (
+            <div class={styles.healthPanel}>
+              <Switch>
+                <Match when={h().state === "ok"}>
+                  <p class={styles.healthLine}>Connected. The relay and this device agree on your partner's key.</p>
+                </Match>
+                <Match when={h().state === "no-partner-on-relay"}>
+                  <p class={styles.healthLine}>
+                    <span class={styles.healthBad}>Not connected.</span> The relay has you on your own.
+                  </p>
+                  <p class={styles.healthDetail}>
+                    This device thinks you're linked, but the relay disagrees — so nothing either of you
+                    writes will reach the other. Re-add your partner below to fix it.
+                  </p>
+                </Match>
+                <Match when={h().state === "key-mismatch"}>
+                  <p class={styles.healthLine}>
+                    <span class={styles.healthBad}>Keys don't match.</span> Your partner re-linked from a
+                    different device.
+                  </p>
+                  <p class={styles.healthDetail}>
+                    You're encrypting to their old key, so their entries can't be read. Re-add your partner
+                    below to pick up the new one.
+                  </p>
+                </Match>
+                <Match when={h().state === "not-paired"}>
+                  <p class={styles.healthLine}>This device isn't linked to a partner yet.</p>
+                </Match>
+                <Match when={h().state === "locked"}>
+                  <p class={styles.healthLine}>Unlock your diary first, then check again.</p>
+                </Match>
+                <Match when={h().state === "offline"}>
+                  <p class={styles.healthLine}>You're offline. Try again when you have a connection.</p>
+                </Match>
+                <Match when={h().state === "error"}>
+                  <p class={styles.healthLine}>
+                    <span class={styles.healthBad}>Couldn't reach the relay.</span>
+                  </p>
+                  <p class={styles.healthDetail}>{(h() as { message: string }).message}</p>
+                </Match>
+              </Switch>
+            </div>
+          )}
         </Show>
         <A href="/onboarding?relink=1" class={styles.item}>
           Re-add partner
