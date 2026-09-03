@@ -171,24 +171,69 @@ export async function restoreAccount(bundle: AccountBundle, passphrase: string):
 // ── Keeping the backup current ──────────────────────────────
 //
 // A recovery backup that stops at the day it was created is close to useless,
-// so it is refreshed after entries are written. The code is not kept anywhere,
-// so the refresh re-derives from the locator the device recorded when the
-// backup was set up.
+// so it is refreshed after each entry is written, from a wrapped copy of the
+// code held on the device.
 
 interface StoredRecoverySettings {
   enabled: boolean;
-  /** The code, wrapped with the device's own key material — see note below. */
-  code?: string;
+  /** The recovery code, wrapped with a key derived from the identity key. */
+  wrappedCode?: { nonce: string; ciphertext: string };
 }
 
 /**
- * The recovery code has to be re-usable by this device to refresh the backup,
- * so it is held in the same store as the diary itself. That store is already
- * where the identity key lives; a device that can read it can read everything
- * anyway. What matters is that the code never reaches the relay.
+ * The code has to stay usable by this device so the backup can be refreshed as
+ * the diary grows — but it cannot sit on disk in the clear. Anyone who could
+ * read it would need nothing else: the restore lookup is unauthenticated by
+ * design, so the code alone yields the identity private key and every entry.
+ * That is the one thing this app protects at rest.
+ *
+ * So it is wrapped with a key derived from the identity secret key, which is
+ * itself only available once the diary is unlocked. Refreshing happens right
+ * after writing an entry, when that key is already in memory.
  */
 export async function setRecoveryCodeForRefresh(code: string): Promise<void> {
-  await storage.saveSetting(BACKUP_ENABLED_KEY, JSON.stringify({ enabled: true, code }));
+  const sk = secretKey();
+  if (!sk) throw new Error("Unlock your diary first");
+
+  const crypto = await loadCrypto();
+  const wrapped = crypto.encryptSecretKeyRaw(
+    new TextEncoder().encode(code),
+    crypto.deriveLocalWrapKey(sk)
+  );
+
+  await storage.saveSetting(
+    BACKUP_ENABLED_KEY,
+    JSON.stringify({
+      enabled: true,
+      wrappedCode: {
+        nonce: crypto.toBase64(wrapped.nonce),
+        ciphertext: crypto.toBase64(wrapped.ciphertext),
+      },
+    })
+  );
+}
+
+/** Unwrap the stored code. Returns null if locked or nothing is stored. */
+async function unwrapRecoveryCode(
+  settings: StoredRecoverySettings
+): Promise<string | null> {
+  const sk = secretKey();
+  if (!sk || !settings.wrappedCode) return null;
+  try {
+    const crypto = await loadCrypto();
+    const plain = crypto.decryptSecretKeyRaw(
+      {
+        nonce: crypto.fromBase64(settings.wrappedCode.nonce),
+        ciphertext: crypto.fromBase64(settings.wrappedCode.ciphertext),
+      },
+      crypto.deriveLocalWrapKey(sk)
+    );
+    return new TextDecoder().decode(plain);
+  } catch {
+    // Wrapped by a different identity — a restore or a device link replaced the
+    // key underneath it. The code is unrecoverable here; the user re-enables.
+    return null;
+  }
 }
 
 async function loadRecoverySettings(): Promise<StoredRecoverySettings> {
@@ -220,11 +265,23 @@ async function setRecoveryBackupEnabled(enabled: boolean): Promise<void> {
  */
 export async function refreshRecoveryBackup(): Promise<void> {
   const settings = await loadRecoverySettings();
-  if (!settings.enabled || !settings.code) return;
-  if (!navigator.onLine) return;
+  if (!settings.enabled || !navigator.onLine) return;
+
+  const code = await unwrapRecoveryCode(settings);
+  if (!code) return;
+
   try {
-    await uploadRecoveryBackup(settings.code);
+    await uploadRecoveryBackup(code);
   } catch (e) {
     console.info("[backup] refresh deferred:", e);
   }
+}
+
+/**
+ * Whether this device can keep the backup current. A phone set up by device
+ * link or restore inherits the account but not the code, so the account can
+ * have a backup that this phone is not advancing.
+ */
+export async function canRefreshRecoveryBackup(): Promise<boolean> {
+  return (await unwrapRecoveryCode(await loadRecoverySettings())) !== null;
 }

@@ -101,6 +101,20 @@ describe("recovery backup", () => {
     expect((await anonGet(`/api/backup?locator=${loc}`)).status).toBe(404);
   });
 
+  test("deleting the account takes the backup with it", async () => {
+    // The Privacy page promises Breakup & Forget removes everything from the
+    // relay immediately. A backup left behind would still be openable by anyone
+    // holding the recovery code.
+    const { initiator } = await createPair();
+    const loc = locator();
+
+    await authPut("/api/backup", { locator: loc, payload: payload("everything") }, initiator.publicKey, initiator.secretKey);
+    expect((await anonGet(`/api/backup?locator=${loc}`)).status).toBe(200);
+
+    await authDelete("/api/account", initiator.publicKey, initiator.secretKey);
+    expect((await anonGet(`/api/backup?locator=${loc}`)).status).toBe(404);
+  });
+
   test("rejects a locator too short to be a real one", async () => {
     const { initiator } = await createPair();
     const short = await authPut(

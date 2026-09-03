@@ -19,8 +19,13 @@ export function getDayId(date: Date = new Date()): string {
  * so syncing from today alone never returns an entry your partner wrote for an
  * earlier day — a late-night entry that lands after the pivot, or anything
  * written while you were offline, stays invisible.
+ *
+ * Matched to the relay's retention window (ENTRY_RETENTION_DAYS). A shorter
+ * lookback would strand entries the relay is still holding: a second phone
+ * left in a drawer for three weeks would come back and collect only the last
+ * few days, and the rest would expire unseen.
  */
-export const SYNC_LOOKBACK_DAYS = 7;
+export const SYNC_LOOKBACK_DAYS = 30;
 
 /** The dayId a background sync should fetch from. */
 export function getSyncSince(date: Date = new Date()): string {

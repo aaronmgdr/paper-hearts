@@ -194,6 +194,9 @@ function SendSide(props: SideProps) {
         </button>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
+          <button class="btn-secondary" onClick={handleAuth} disabled={props.loading()}>
+            Start again
+          </button>
         </Show>
         <p class={styles.qrWarning}>
           This link carries your whole diary to whichever device opens it. Only open it on a
@@ -307,7 +310,8 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
         </p>
         <p class={styles.bundleWarning}>
           Entries already written here are kept and merged in, but this phone will stop being
-          its own account.
+          its own account. You'll set a new passphrase for it, and any biometric unlock on
+          this phone will need setting up again in Settings.
         </p>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
@@ -321,9 +325,15 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
       </Match>
 
       <Match when={step() === "checking"}>
-        <h2 class={styles.heading}>Connecting…</h2>
+        <h2 class={styles.heading}>{props.error() ? "Couldn't connect" : "Connecting…"}</h2>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
+          <div class={styles.actions}>
+            <button class="btn-primary" onClick={beginClaim} disabled={props.loading()}>
+              Try again
+            </button>
+            <button class="btn-secondary" onClick={props.onDone}>Cancel</button>
+          </div>
         </Show>
       </Match>
 
@@ -334,9 +344,16 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
           Your other phone should be showing the same six digits. Confirm there, and your diary
           will arrive here.
         </p>
-        <p class={local.status}>Waiting for your other phone…</p>
+        <Show when={!props.error()}>
+          <p class={local.status}>Waiting for your other phone…</p>
+        </Show>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
+          <div class={styles.actions}>
+            <button class="btn-primary" onClick={beginClaim} disabled={props.loading()}>
+              Try again
+            </button>
+          </div>
         </Show>
       </Match>
 
