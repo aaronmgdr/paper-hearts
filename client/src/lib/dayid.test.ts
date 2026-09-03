@@ -50,22 +50,28 @@ describe("getSyncSince", () => {
   // were offline — is never returned by a background sync.
   test("looks back a full window from today's dayId", () => {
     const d = new Date("2026-02-23T12:00:00");
-    expect(getSyncSince(d)).toBe("2026-02-16");
     expect(getDayId(d)).toBe("2026-02-23");
+    expect(getSyncSince(d)).toBe("2026-01-24");
   });
 
   test("respects the night-owl pivot", () => {
     const d = new Date("2026-02-23T02:00:00");
     expect(getDayId(d)).toBe("2026-02-22");
-    expect(getSyncSince(d)).toBe("2026-02-15");
+    expect(getSyncSince(d)).toBe("2026-01-23");
   });
 
   test("crosses a month boundary", () => {
-    expect(getSyncSince(new Date("2026-03-03T12:00:00"))).toBe("2026-02-24");
+    expect(getSyncSince(new Date("2026-03-03T12:00:00"))).toBe("2026-02-01");
+  });
+
+  test("covers the relay's whole retention window", () => {
+    // The relay holds entries for ENTRY_RETENTION_DAYS. A shorter lookback
+    // would let a phone left unopened for weeks miss entries that are still
+    // sitting there, and they would expire unseen.
+    expect(SYNC_LOOKBACK_DAYS).toBe(30);
   });
 
   test("is always at or before today", () => {
-    expect(SYNC_LOOKBACK_DAYS).toBeGreaterThan(0);
     const now = new Date();
     expect(getSyncSince(now) <= getDayId(now)).toBe(true);
   });

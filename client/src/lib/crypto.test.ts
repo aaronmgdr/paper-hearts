@@ -161,12 +161,21 @@ describe("recovery codes", () => {
 
   test("derivation survives how people actually transcribe a code", async () => {
     const { deriveRecoveryKeys } = await import("./crypto");
-    const canonical = deriveRecoveryKeys("A1B2-C3D4");
+    const canonical = deriveRecoveryKeys("A1B2-C3D4-E5F6-G7H8-J9K0");
 
     // Spacing, case, and the classic look-alike slips all land on the same keys.
-    expect(deriveRecoveryKeys("a1b2 c3d4").locator).toBe(canonical.locator);
-    expect(deriveRecoveryKeys("A1B2C3D4").locator).toBe(canonical.locator);
-    expect(deriveRecoveryKeys("AIB2-C3D4").locator).toBe(canonical.locator); // I -> 1
+    expect(deriveRecoveryKeys("a1b2 c3d4 e5f6 g7h8 j9k0").locator).toBe(canonical.locator);
+    expect(deriveRecoveryKeys("A1B2C3D4E5F6G7H8J9K0").locator).toBe(canonical.locator);
+    expect(deriveRecoveryKeys("AIB2-C3D4-E5F6-G7H8-J9K0").locator).toBe(canonical.locator); // I -> 1
+    expect(deriveRecoveryKeys("A1B2-C3D4-E5F6-G7H8-J9KO").locator).toBe(canonical.locator); // O -> 0
+  });
+
+  test("a half-typed code is rejected before libsodium sees it", async () => {
+    const { deriveRecoveryKeys } = await import("./crypto");
+    // Otherwise the restore screen — reached after losing every device — shows
+    // libsodium's internal key-length error instead of something readable.
+    expect(() => deriveRecoveryKeys("A1B2-C3D4")).toThrow(/full recovery code/i);
+    expect(() => deriveRecoveryKeys("")).toThrow(/full recovery code/i);
   });
 
   test("a different code opens nothing", async () => {

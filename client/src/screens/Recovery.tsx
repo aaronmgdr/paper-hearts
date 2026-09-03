@@ -6,6 +6,7 @@ import {
   getRecoveryBackupStatus,
   deleteRecoveryBackup,
   isRecoveryBackupEnabled,
+  canRefreshRecoveryBackup,
   exportBackupFile,
 } from "../lib/backup";
 import type { RecoveryBackupStatus } from "../lib/backup";
@@ -26,6 +27,7 @@ export default function Recovery() {
 
   const [status, setStatus] = createSignal<RecoveryBackupStatus>({ exists: false });
   const [enabled, setEnabled] = createSignal(false);
+  const [canRefresh, setCanRefresh] = createSignal(true);
 
   const [filePass, setFilePass] = createSignal("");
   const [fileConfirm, setFileConfirm] = createSignal("");
@@ -36,8 +38,13 @@ export default function Recovery() {
   onMount(async () => {
     if (!publicKey()) return;
     setEnabled(await isRecoveryBackupEnabled());
+    setCanRefresh(await canRefreshRecoveryBackup());
     setStatus(await getRecoveryBackupStatus());
   });
+
+  // A phone set up by device link or restore inherits the account but not the
+  // recovery code, so the backup would quietly stop advancing on this device.
+  const staleOnThisPhone = () => status().exists && !canRefresh();
 
   async function handleExportFile() {
     if (filePass().length < 8) return setError("Use at least 8 characters.");
@@ -84,6 +91,7 @@ export default function Recovery() {
       await uploadRecoveryBackup(recoveryCode());
       await setRecoveryCodeForRefresh(recoveryCode());
       setEnabled(true);
+      setCanRefresh(true);
       setStatus(await getRecoveryBackupStatus());
       setRecoveryCode("");
       setTypedCode("");
@@ -100,6 +108,7 @@ export default function Recovery() {
     try {
       await deleteRecoveryBackup();
       setEnabled(false);
+      setCanRefresh(true);
       setStatus({ exists: false });
     } catch (e: any) {
       setError(e.message || "Couldn't remove the backup.");
@@ -165,8 +174,24 @@ export default function Recovery() {
           onClick={() => { setPanel(panel() === "none" ? "code-intro" : "none"); setError(""); }}
         >
           <span>Recovery code backup</span>
-          <span class="meta">{enabled() && status().exists ? `On · ${lastSaved()}` : "Off"}</span>
+          <span class="meta">
+            {staleOnThisPhone()
+              ? "Needs attention"
+              : enabled() && status().exists
+                ? `On · ${lastSaved()}`
+                : "Off"}
+          </span>
         </button>
+
+        <Show when={staleOnThisPhone()}>
+          <div class={settingsStyles.exportPanel}>
+            <p class={local.status}>
+              This account has a recovery backup from {lastSaved()}, but this phone doesn't
+              hold the code, so it isn't keeping it current. Create a new code here to
+              take over — the old one stops working.
+            </p>
+          </div>
+        </Show>
 
         <Show when={panel() !== "none" && panel() !== "file"}>
           <div class={settingsStyles.exportPanel}>
@@ -188,7 +213,7 @@ export default function Recovery() {
                   <button class="btn-primary" onClick={handleGenerateCode} disabled={loading()}>
                     {loading() ? "Working..." : enabled() ? "Create a new code" : "Set it up"}
                   </button>
-                  <Show when={enabled() && status().exists}>
+                  <Show when={status().exists}>
                     <button class="btn-secondary" onClick={handleTurnOff} disabled={loading()}>
                       Turn off and delete
                     </button>

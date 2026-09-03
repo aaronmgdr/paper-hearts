@@ -220,7 +220,11 @@ export function pairingVerificationCode(token: string, ephemeralPublicKeyB64: st
 // Crockford-style base32, minus I L O U — the characters people misread when
 // copying a code off paper months after they wrote it down.
 const RECOVERY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const RECOVERY_BYTES = 20; // 160 bits
+// One alphabet character per random byte, so 5 bits survive each: 20 chars is
+// ~100 bits. Ample against a rate-limited online lookup, which is the only way
+// a code is ever tried.
+const RECOVERY_BYTES = 20;
+const MIN_RECOVERY_LENGTH = 16;
 
 /** A fresh recovery code, grouped for transcription: XXXX-XXXX-… (8 groups). */
 export function generateRecoveryCode(): string {
@@ -256,7 +260,14 @@ export interface RecoveryKeys {
  * the locator — which the relay does — says nothing about the key.
  */
 export function deriveRecoveryKeys(code: string): RecoveryKeys {
-  const material = sodium.from_string(normalizeRecoveryCode(code));
+  const normalized = normalizeRecoveryCode(code);
+  // Guarded here so a half-typed code produces our message rather than
+  // libsodium's key-length error — on the screen someone reaches after losing
+  // every device, that distinction matters.
+  if (normalized.length < MIN_RECOVERY_LENGTH) {
+    throw new Error("That doesn't look like a full recovery code.");
+  }
+  const material = sodium.from_string(normalized);
   const locator = sodium.crypto_generichash(
     32,
     sodium.from_string("paper-hearts/backup-locator/v1"),
@@ -268,4 +279,17 @@ export function deriveRecoveryKeys(code: string): RecoveryKeys {
     material
   );
   return { locator: sodium.to_base64(locator, sodium.base64_variants.URLSAFE_NO_PADDING), key };
+}
+
+/**
+ * A wrapping key bound to this device's identity, for small secrets that have
+ * to survive on disk but must not be readable without unlocking — the recovery
+ * code, which can fetch and decrypt the whole account on its own.
+ */
+export function deriveLocalWrapKey(secretKey: Uint8Array): Uint8Array {
+  return sodium.crypto_generichash(
+    sodium.crypto_secretbox_KEYBYTES,
+    sodium.from_string("paper-hearts/recovery-code-wrap/v1"),
+    secretKey
+  );
 }

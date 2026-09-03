@@ -8,6 +8,14 @@ const loadCrypto = () => import("./crypto");
 const POLL_INTERVAL_MS = 2000;
 
 /**
+ * A refusal from the relay — an expired token, someone else's session. Ends the
+ * transfer. Anything else thrown while polling is the network, and these run on
+ * phones that lock their screens and change cells mid-handshake, so those are
+ * retried rather than treated as failure.
+ */
+class TransferRefused extends Error {}
+
+/**
  * Moving an account onto a second phone means moving the identity private key,
  * so the relay is treated as a courier that must not be able to open the
  * parcel:
@@ -70,8 +78,8 @@ export function awaitClaim(
       try {
         const { status, data } = await relay.getDeviceLink(token, pk, sk);
         if (stopped) return;
-        if (status === 404) throw new Error("This transfer expired. Start again.");
-        if (status !== 200) throw new Error(data.error || "Transfer failed");
+        if (status === 404) throw new TransferRefused("This transfer expired. Start again.");
+        if (status !== 200) throw new TransferRefused(data.error || "Transfer failed");
         if (data.ephemeralPublicKey) {
           onClaimed(
             data.ephemeralPublicKey,
@@ -80,8 +88,12 @@ export function awaitClaim(
           return;
         }
       } catch (e) {
-        if (!stopped) onError(e instanceof Error ? e : new Error(String(e)));
-        return;
+        if (stopped) return;
+        if (e instanceof TransferRefused) {
+          onError(e);
+          return;
+        }
+        console.info("[devicelink] poll failed, retrying:", e);
       }
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
@@ -160,16 +172,31 @@ export function awaitAccountBundle(
       try {
         const { status, data } = await relay.getDeviceLinkPayload(token);
         if (stopped) return;
-        if (status === 404) throw new Error("This transfer expired. Start again on your other phone.");
-        if (status !== 200) throw new Error(data.error || "Transfer failed");
+        if (status === 404) {
+          throw new TransferRefused("This transfer expired. Start again on your other phone.");
+        }
+        if (status !== 200) throw new TransferRefused(data.error || "Transfer failed");
         if (data.payload) {
-          const json = crypto.openSealed(crypto.fromBase64(data.payload), keys);
-          onBundle(JSON.parse(json) as AccountBundle);
+          // A bundle that won't open is terminal — it was sealed to a different
+          // key, which is the case the six-digit check exists to catch.
+          let bundle: AccountBundle;
+          try {
+            bundle = JSON.parse(
+              crypto.openSealed(crypto.fromBase64(data.payload), keys)
+            ) as AccountBundle;
+          } catch {
+            throw new TransferRefused("That bundle wasn't meant for this phone. Start again.");
+          }
+          onBundle(bundle);
           return;
         }
       } catch (e) {
-        if (!stopped) onError(e instanceof Error ? e : new Error(String(e)));
-        return;
+        if (stopped) return;
+        if (e instanceof TransferRefused) {
+          onError(e);
+          return;
+        }
+        console.info("[devicelink] poll failed, retrying:", e);
       }
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
