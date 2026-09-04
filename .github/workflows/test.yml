@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   server:
@@ -41,7 +40,9 @@ jobs:
           echo 'DATABASE_URL=postgres://postgres:postgres@localhost:5433/paperhearts' > server/.env.test
 
       - name: Run migrations
-        run: bun run --env-file .env --cwd server migrate
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/paperhearts
+        run: bun run --cwd server migrate
 
       - name: Run tests
         run: bun run --cwd server test

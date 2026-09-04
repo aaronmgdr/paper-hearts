@@ -72,12 +72,11 @@ export default function Privacy() {
         </section>
 
         <section>
-          <h2>Partner backup is the only way to recover</h2>
+          <h2>If one phone remains</h2>
           <p>
-            The only way to restore your writing after losing a device is to transfer
-            your identity from your partner's device using the in-app recovery flow.
-            Your partner's device holds a copy of the shared keys needed to re-derive
-            access. Keep your partnership active and both devices in good health.
+            Settings → Add another phone copies this account onto a new device. That is
+            how you replace a phone, not how you recover from losing every device —
+            that is what a backup file or recovery code is for.
           </p>
         </section>
 

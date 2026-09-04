@@ -45,3 +45,15 @@
   font-family: var(--font-ui);
   font-size: 14px;
 }
+
+.restoreLink {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--dusty-mauve);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
