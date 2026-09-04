@@ -226,7 +226,7 @@ const RECOVERY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const RECOVERY_BYTES = 20;
 const MIN_RECOVERY_LENGTH = 16;
 
-/** A fresh recovery code, grouped for transcription: XXXX-XXXX-… (8 groups). */
+/** A fresh recovery code, grouped for transcription: XXXX-XXXX-… (5 groups). */
 export function generateRecoveryCode(): string {
   const bytes = sodium.randombytes_buf(RECOVERY_BYTES);
   let out = "";
