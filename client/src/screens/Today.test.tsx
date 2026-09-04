@@ -21,6 +21,9 @@ vi.mock("../lib/store", () => ({
   entriesVersion: () => 0,
   isPaired: () => false,
   submitEntry: (...args: unknown[]) => mockSubmitEntry(...args),
+  updateEntry: vi.fn(),
+  publicKey: () => new Uint8Array([1]),
+  partnerName: () => "Partner",
 }));
 
 vi.mock("@solidjs/router", () => ({
@@ -75,7 +78,7 @@ describe("Today — mutual disclosure states", () => {
     await waitFor(() =>
       expect(screen.getByPlaceholderText("What's on your heart today?")).toBeInTheDocument()
     );
-    expect(screen.queryByText("Waiting for your partner...")).not.toBeInTheDocument();
+    expect(screen.queryByText("Waiting for Partner...")).not.toBeInTheDocument();
   });
 
   test("shows compose + partner banner when partner wrote but I haven't", async () => {
@@ -85,7 +88,7 @@ describe("Today — mutual disclosure states", () => {
     await waitFor(() =>
       expect(screen.getByPlaceholderText("What's on your heart today?")).toBeInTheDocument()
     );
-    expect(screen.getByText("Your partner has written today")).toBeInTheDocument();
+    expect(screen.getByText("Partner has written today")).toBeInTheDocument();
   });
 
   test("shows veil when I wrote but partner hasn't", async () => {
@@ -93,7 +96,7 @@ describe("Today — mutual disclosure states", () => {
     render(() => <Today />);
 
     await waitFor(() =>
-      expect(screen.getByText("Waiting for your partner...")).toBeInTheDocument()
+      expect(screen.getByText("Waiting for Partner...")).toBeInTheDocument()
     );
     expect(screen.queryByPlaceholderText("What's on your heart today?")).not.toBeInTheDocument();
   });
@@ -106,7 +109,7 @@ describe("Today — mutual disclosure states", () => {
     expect(screen.getByText("Partner")).toBeInTheDocument();
     expect(screen.getByText("my words")).toBeInTheDocument();
     expect(screen.getByText("partner's words")).toBeInTheDocument();
-    expect(screen.queryByText("Waiting for your partner...")).not.toBeInTheDocument();
+    expect(screen.queryByText("Waiting for Partner...")).not.toBeInTheDocument();
   });
 });
 
@@ -138,7 +141,7 @@ describe("Today — composing and submitting", () => {
     await userEvent.type(textarea, "I love you");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(mockSubmitEntry).toHaveBeenCalledWith("I love you", getDayId()));
-    await waitFor(() => expect(screen.getByText("Waiting for your partner...")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Waiting for Partner...")).toBeInTheDocument());
 
   });
 

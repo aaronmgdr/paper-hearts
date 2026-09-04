@@ -1,4 +1,5 @@
 import { createSignal, onMount, Show } from "solid-js";
+import { A } from "@solidjs/router";
 import { unlock, unlockWithPrf, hasPrfCredential, unlockMethod } from "../lib/store";
 import styles from "./Unlock.module.css";
 
@@ -103,6 +104,9 @@ export default function UnlockScreen(props: { onUnlocked: () => void }) {
             </Show>
           </form>
         </Show>
+        <A href="/restore" class={styles.restoreLink}>
+          Restore from a backup instead
+        </A>
       </div>
     </div>
   );
