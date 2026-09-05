@@ -3,6 +3,14 @@ import { verifyRequest, AuthError } from "../auth";
 import { notifyPartner } from "../push";
 import { ENTRY_RETENTION_DAYS } from "../retention";
 
+/**
+ * How far the sync cursor is rewound before it is handed back. Cheap insurance
+ * against a row whose timestamp lands fractionally before its commit: a little
+ * re-delivery costs nothing (clients merge idempotently), a missed entry is
+ * invisible and permanent.
+ */
+const CURSOR_OVERLAP_MS = 60_000;
+
 
 /**
  * POST /api/entries
@@ -81,6 +89,13 @@ export async function createEntry(req: Request, path: string): Promise<Response>
  * to a new relay for at least one session — and on a day where only you had
  * written, your own blob would show up as your partner's and lift the veil.
  * Defaulting to partner-only keeps those clients correct until they update.
+ *
+ * `changedSince` narrows to rows written or edited since the client last
+ * synced. Without it the foreground poll re-sends the whole retention window
+ * every 30 seconds — tens of blobs a device already holds. A plain day cursor
+ * would not do: entries can be edited after the fact, so the filter is on
+ * modification time. The reply carries `nextChangedSince` to send back next
+ * time; the client never supplies a time of its own making.
  */
 export async function getEntries(req: Request, path: string): Promise<Response> {
   let auth;
@@ -96,19 +111,40 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
   const url = new URL(req.url);
   const since = url.searchParams.get("since") || "1970-01-01";
   const includeOwn = url.searchParams.get("scope") === "all";
+
+  // An unparseable cursor means a full window rather than an empty reply —
+  // returning nothing would look like "you are up to date" and strand the
+  // device silently, which is the failure mode this whole branch exists to
+  // stop happening.
+  const rawChangedSince = url.searchParams.get("changedSince");
+  const changedSinceDate = rawChangedSince ? new Date(rawChangedSince) : null;
+  const changedSince =
+    changedSinceDate && !isNaN(changedSinceDate.getTime()) ? changedSinceDate : null;
+
   console.log(
-    `[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since} scope=${includeOwn ? "all" : "partner"}`
+    `[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since}` +
+      ` scope=${includeOwn ? "all" : "partner"} changedSince=${changedSince?.toISOString() ?? "-"}`
   );
+
+  // Read the clock before the query, so anything committed while it runs falls
+  // after the cursor and comes back next time. Postgres now() is transaction
+  // start time, not commit time, so a row can carry a stamp fractionally older
+  // than its commit — CURSOR_OVERLAP_MS is the margin that covers it.
+  const [clock] = await sql`SELECT now() AS now`;
+  const serverNow = new Date(clock.now);
 
   // Everything in this pair inside the retention window, acknowledged or not.
   // Filtering on acked_at would hide an entry from a second device as soon as
-  // the first collected it.
+  // the first collected it. GREATEST ignores a NULL updated_at, so a row that
+  // has never been edited compares on created_at.
   const entries = await sql`
     SELECT id, author_key, day_id, payload, fetched_at FROM entries
     WHERE pair_id = ${auth.pairId}
       AND day_id >= ${since}
       AND created_at > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
       AND (${includeOwn} OR author_key != ${auth.publicKey})
+      AND (${changedSince}::timestamptz IS NULL
+           OR GREATEST(created_at, updated_at) > ${changedSince}::timestamptz)
     ORDER BY day_id ASC, author_key ASC
   `;
 
@@ -132,7 +168,10 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
   }));
 
   console.log(`[getEntries] returning ${result.length} entries`);
-  return Response.json({ entries: result });
+  return Response.json({
+    entries: result,
+    nextChangedSince: new Date(serverNow.getTime() - CURSOR_OVERLAP_MS).toISOString(),
+  });
 }
 
 /**

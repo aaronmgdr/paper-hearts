@@ -47,7 +47,7 @@ function refreshFromRelay(): void {
   if (now - lastRelayRefresh < REFRESH_DEBOUNCE_MS) return;
   lastRelayRefresh = now;
   flushOutbox().catch(console.error);
-  fetchAndDecryptEntries(getSyncSince())
+  fetchAndDecryptEntries(getSyncSince(), { sync: "incremental" })
     .then(() => bumpEntriesVersion())
     .catch(console.error);
 }
@@ -603,18 +603,61 @@ export function mergeRelayedEntry(
   return true;
 }
 
-export async function fetchAndDecryptEntries(since: string): Promise<void> {
+const SYNC_CURSOR_KEY = "paper-hearts:sync-cursor";
+
+/**
+ * The relay's own clock, from the last complete sync. Only the background
+ * sync uses it — a targeted fetch for one archived day asks a narrower
+ * question, and letting its answer move the shared cursor would skip
+ * everything outside that day.
+ *
+ * Nothing here is derived from this device's clock: the value is whatever the
+ * relay last handed back.
+ */
+async function loadSyncCursor(): Promise<string | null> {
+  return storage.loadSetting(SYNC_CURSOR_KEY);
+}
+
+async function saveSyncCursor(cursor: string): Promise<void> {
+  await storage.saveSetting(SYNC_CURSOR_KEY, cursor);
+}
+
+/**
+ * Forget where we had synced to, so the next sync pulls the whole window
+ * again. Anything that replaces this device's diary has to call this: a phone
+ * that adopts an account or restores a backup holds a partial archive, and a
+ * cursor would tell the relay it was already up to date.
+ */
+export async function resetSyncCursor(): Promise<void> {
+  await storage.saveSetting(SYNC_CURSOR_KEY, "");
+}
+
+/**
+ * - `incremental` — the foreground poll. Asks only for what moved since the
+ *   last sync, and records the new mark.
+ * - `full` — app open and push wake-ups. Pulls the whole window regardless of
+ *   the mark, then records a fresh one. Once a session, this is cheap, and it
+ *   heals a cursor that has drifted for any reason.
+ * - omitted — a targeted fetch for one archived day. Narrower than the window,
+ *   so it must not touch the shared mark.
+ */
+export async function fetchAndDecryptEntries(
+  since: string,
+  opts: { sync?: "full" | "incremental" } = {}
+): Promise<void> {
   console.log("[fetchAndDecryptEntries] fetching entries since", since);
   const pk = publicKey();
   const sk = secretKey();
   const ss = sharedSecret();
   if (!pk || !sk || !ss) throw new Error("Not unlocked or not paired");
 
-  const { status, data } = await relay.getEntries(since, pk, sk);
+  const cursor = opts.sync === "incremental" ? (await loadSyncCursor()) || null : null;
+  const { status, data } = await relay.getEntries(since, pk, sk, cursor);
   if (status !== 200) return;
 
   const entries = data.entries || [];
   const idsToAck: string[] = [];
+  let allHandled = true;
   const crypto = await loadCrypto();
 
   for (const entry of entries) {
@@ -643,12 +686,20 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
       // each time would post a few dozen ids every 30 seconds to no effect.
       if (author === "partner" && changed) idsToAck.push(entry.id);
     } catch (e) {
+      allHandled = false;
       console.error("[fetchAndDecryptEntries] failed to decrypt entry:", e);
     }
   }
 
   if (idsToAck.length > 0) {
     await relay.ackEntries(idsToAck, pk, sk);
+  }
+
+  // Only move the cursor when every row landed. Advancing past an entry that
+  // failed to decrypt would put it permanently out of reach — the relay would
+  // never offer it again.
+  if (opts.sync && allHandled && data.nextChangedSince) {
+    await saveSyncCursor(data.nextChangedSince);
   }
 }
 
@@ -957,5 +1008,6 @@ export async function installAccountBundle(
     setSharedSecret(crypto.computeSharedSecret(sk, pk, crypto.fromBase64(bundle.partnerPublicKey)));
   }
   if (bundle.partnerName) setPartnerNameSignal(bundle.partnerName);
+  await resetSyncCursor();
   bumpEntriesVersion();
 }

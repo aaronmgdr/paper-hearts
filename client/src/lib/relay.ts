@@ -84,12 +84,19 @@ export async function postEntry(
 export async function getEntries(
   since: string,
   publicKey: Uint8Array,
-  secretKey: Uint8Array
+  secretKey: Uint8Array,
+  changedSince?: string | null
 ) {
   // scope=all asks for this account's own entries alongside the partner's, so
   // a second phone sees what the first one wrote. The relay only sends them
   // when asked — older clients file every row in the partner slot.
-  const path = `${BASE}/entries?since=${since}&scope=all`;
+  //
+  // changedSince narrows the reply to what has moved since the last sync. It
+  // is always a value the relay handed us, never a time from this device's
+  // clock.
+  const path =
+    `${BASE}/entries?since=${since}&scope=all` +
+    (changedSince ? `&changedSince=${encodeURIComponent(changedSince)}` : "");
   const headers = await signedHeaders("GET", path, null, publicKey, secretKey);
   const res = await fetch(path, { method: "GET", headers });
   return { status: res.status, data: await res.json() };

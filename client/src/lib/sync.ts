@@ -59,7 +59,7 @@ export function listenForSyncMessages(): void {
       flushOutbox().catch(console.error);
     }
     if (event.data?.type === "fetch-entries") {
-      fetchAndDecryptEntries(getSyncSince())
+      fetchAndDecryptEntries(getSyncSince(), { sync: "full" })
         .then(() => bumpEntriesVersion())
         .catch(console.error);
     }

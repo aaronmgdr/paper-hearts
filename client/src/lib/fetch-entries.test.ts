@@ -3,8 +3,10 @@ import type { StoredIdentity, DayFile } from "./storage";
 
 let identity: StoredIdentity | null = null;
 let days: Record<string, DayFile> = {};
+let settings: Record<string, string> = {};
 
 const mockGetEntries = vi.fn();
+const CURSOR = "2026-09-05T18:59:00.000Z";
 const mockAckEntries = vi.fn().mockResolvedValue({ status: 200, data: { acknowledged: 0 } });
 
 vi.mock("./storage", () => ({
@@ -13,9 +15,9 @@ vi.mock("./storage", () => ({
   saveDay: async (dayId: string, day: DayFile) => { days[dayId] = structuredClone(day); },
   loadDay: async (dayId: string) => (days[dayId] ? structuredClone(days[dayId]) : null),
   listDays: async () => Object.keys(days).sort().reverse(),
-  saveSetting: async () => {},
-  loadSetting: async () => null,
-  clearAllLocalData: async () => { identity = null; days = {}; },
+  saveSetting: async (key: string, value: string) => { settings[key] = value; },
+  loadSetting: async (key: string) => settings[key] ?? null,
+  clearAllLocalData: async () => { identity = null; days = {}; settings = {}; },
 }));
 
 vi.mock("./relay", () => ({
@@ -34,13 +36,21 @@ vi.mock("./sync", () => ({
   requestBackgroundSync: async () => {},
 }));
 
-const { createIdentity, completeInitiatorPairing, fetchAndDecryptEntries, publicKey, secretKey } =
-  await import("./store");
+const {
+  createIdentity,
+  completeInitiatorPairing,
+  fetchAndDecryptEntries,
+  buildAccountBundle,
+  installAccountBundle,
+  publicKey,
+  secretKey,
+} = await import("./store");
 const crypto = await import("./crypto");
 
 beforeEach(async () => {
   identity = null;
   days = {};
+  settings = {};
   mockGetEntries.mockReset();
   mockAckEntries.mockClear();
   await crypto.init();
@@ -156,5 +166,88 @@ describe("fetchAndDecryptEntries — second phone", () => {
     await fetchAndDecryptEntries("2026-09-01");
     expect(mockAckEntries).not.toHaveBeenCalled();
     expect(days["2026-09-05"].entries[0].payload).toBe("partner's words");
+  });
+});
+
+describe("fetchAndDecryptEntries — sync cursor", () => {
+  async function pairedIdentity() {
+    await createIdentity("passphrase");
+    const partner = crypto.generateKeyPair();
+    await completeInitiatorPairing(crypto.toBase64(partner.publicKey));
+    return partner;
+  }
+
+  function emptyReply() {
+    mockGetEntries.mockResolvedValue({
+      status: 200,
+      data: { entries: [], nextChangedSince: CURSOR },
+    });
+  }
+
+  test("an incremental sync sends the mark the relay last handed back", async () => {
+    await pairedIdentity();
+    emptyReply();
+
+    // Nothing stored yet, so the first poll asks for the whole window.
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls[0][3]).toBeNull();
+
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls[1][3]).toBe(CURSOR);
+  });
+
+  test("a full sync ignores the mark but still moves it", async () => {
+    // Once a session, a whole-window pull heals a cursor that has drifted.
+    await pairedIdentity();
+    emptyReply();
+
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    await fetchAndDecryptEntries("2026-09-01", { sync: "full" });
+    expect(mockGetEntries.mock.calls[1][3]).toBeNull();
+
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls[2][3]).toBe(CURSOR);
+  });
+
+  test("a targeted fetch for one day leaves the mark alone", async () => {
+    // It asks a narrower question than the window; letting its answer move the
+    // shared mark would skip everything outside that day.
+    await pairedIdentity();
+    emptyReply();
+
+    await fetchAndDecryptEntries("2026-09-05");
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls[1][3]).toBeNull();
+  });
+
+  test("the mark stays put when an entry could not be read", async () => {
+    // Advancing past an undecryptable row would put it permanently out of
+    // reach — the relay would never offer it again.
+    await pairedIdentity();
+    mockGetEntries.mockResolvedValue({
+      status: 200,
+      data: {
+        entries: [{ id: "bad", dayId: "2026-09-05", payload: "!!!not-base64!!!", author: "partner" }],
+        nextChangedSince: CURSOR,
+      },
+    });
+
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls[1][3]).toBeNull();
+  });
+
+  test("adopting an account clears the mark", async () => {
+    // A phone that has just been handed an account holds a partial archive; a
+    // mark would tell the relay it was already up to date.
+    await pairedIdentity();
+    emptyReply();
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+
+    const bundle = await buildAccountBundle();
+    await installAccountBundle(bundle, "a new device passphrase");
+
+    await fetchAndDecryptEntries("2026-09-01", { sync: "incremental" });
+    expect(mockGetEntries.mock.calls.at(-1)![3]).toBeNull();
   });
 });
