@@ -68,7 +68,13 @@ export async function createEntry(req: Request, path: string): Promise<Response>
 
 /**
  * GET /api/entries?since={dayId}
- * Authenticated. Fetch undelivered entries from partner.
+ * Authenticated. Fetch entries in this pair — the partner's, and your own.
+ *
+ * Own entries have to come back too: a second phone on the same account never
+ * sees what the first one wrote otherwise, because those blobs are authored by
+ * this public key and used to be filtered out. Two phones share a key, not a
+ * user row, so this is the only way they stay in sync after the initial copy.
+ * Clients label each row `me` or `partner` and merge by author+day.
  */
 export async function getEntries(req: Request, path: string): Promise<Response> {
   let auth;
@@ -85,26 +91,13 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
   const since = url.searchParams.get("since") || "1970-01-01";
   console.log(`[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since}`);
 
-  // Find the partner's public key
-  const partners = await sql`
-    SELECT public_key FROM users
-    WHERE pair_id = ${auth.pairId} AND public_key != ${auth.publicKey}
-  `;
-
-  if (partners.length === 0) {
-    return Response.json({ entries: [] });
-  }
-
-  const partnerKey = partners[0].public_key;
-
-  // Everything from the partner inside the retention window, acknowledged or
-  // not. Filtering on acked_at would hide an entry from a second device on the
-  // same account as soon as the first device collected it. Clients key partner
-  // entries by day and overwrite in place, so re-delivery is a no-op for them.
+  // Everything in this pair inside the retention window, acknowledged or not.
+  // Filtering on acked_at would hide an entry from a second device as soon as
+  // the first collected it. Filtering out author_key = self would hide this
+  // account's own writes from its other phone.
   const entries = await sql`
-    SELECT id, day_id, payload, fetched_at FROM entries
+    SELECT id, author_key, day_id, payload, fetched_at FROM entries
     WHERE pair_id = ${auth.pairId}
-      AND author_key = ${partnerKey}
       AND day_id >= ${since}
       AND created_at > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
     ORDER BY day_id ASC
@@ -126,6 +119,7 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
     id: e.id,
     dayId: typeof e.day_id === "string" ? e.day_id.slice(0, 10) : new Date(e.day_id).toISOString().slice(0, 10),
     payload: Buffer.from(e.payload).toString("base64"),
+    author: e.author_key === auth.publicKey ? "me" : "partner",
   }));
 
   console.log(`[getEntries] returning ${result.length} entries`);

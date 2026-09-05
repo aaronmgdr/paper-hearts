@@ -151,26 +151,40 @@ describe("GET /api/entries", () => {
     expect(data.entries).toHaveLength(1);
     expect(data.entries[0].dayId).toBe(dayId);
     expect(data.entries[0].payload).toBe(payload);
+    expect(data.entries[0].author).toBe("partner");
   });
 
-  test("does not return own entries", async () => {
-    const { initiator } = await createPair();
+  test("returns own entries so a second phone on this account can collect them", async () => {
+    const { initiator, follower } = await createPair();
     const dayId = todayDayId();
+    const mine = Buffer.from("written on phone A").toString("base64");
+    const theirs = Buffer.from("written by partner").toString("base64");
 
-    await authPost(
-      "/api/entries",
-      { dayId, payload: Buffer.from("mine").toString("base64") },
-      initiator.publicKey,
-      initiator.secretKey
-    );
+    await authPost("/api/entries", { dayId, payload: mine }, initiator.publicKey, initiator.secretKey);
+    await authPost("/api/entries", { dayId, payload: theirs }, follower.publicKey, follower.secretKey);
 
-    const { data } = await authGet(
+    const { status, data } = await authGet(
       `/api/entries?since=${dayId}`,
       initiator.publicKey,
       initiator.secretKey
     );
 
-    expect(data.entries).toHaveLength(0);
+    expect(status).toBe(200);
+    expect(data.entries).toHaveLength(2);
+    const byAuthor = Object.fromEntries(data.entries.map((e: { author: string; payload: string }) => [e.author, e.payload]));
+    expect(byAuthor.me).toBe(mine);
+    expect(byAuthor.partner).toBe(theirs);
+
+    const asFollower = await authGet(
+      `/api/entries?since=${dayId}`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    const followerView = Object.fromEntries(
+      asFollower.data.entries.map((e: { author: string; payload: string }) => [e.author, e.payload])
+    );
+    expect(followerView.me).toBe(theirs);
+    expect(followerView.partner).toBe(mine);
   });
 
   test("returns empty array when no entries", async () => {

@@ -136,8 +136,9 @@ function SendSide(props: SideProps) {
       <Match when={step() === "auth"}>
         <h1 class={styles.heading}>Add another phone</h1>
         <p class={styles.sub}>
-          Your other phone will hold the same diary — both phones stay in sync, and either
-          one can write.
+          Your other phone will hold the same diary. Either one can write — open the
+          other phone to see it. Notifications ping only one phone, whichever last
+          turned them on.
         </p>
         <Show
           when={unlockMethod() === "biometrics"}
@@ -397,7 +398,7 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
           </svg>
         </div>
         <h2 class={styles.heading}>This phone is ready.</h2>
-        <p class={styles.sub}>Both phones now hold the same diary.</p>
+        <p class={styles.sub}>Both phones now hold the same diary. Open the other one to pick up new writes.</p>
       </Match>
     </Switch>
   );

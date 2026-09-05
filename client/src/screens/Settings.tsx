@@ -226,7 +226,7 @@ export default function Settings() {
         </Show>
         <button class={styles.item} onClick={togglePush} disabled={pushLoading()}>
           <span>Notifications</span>
-          <span class="meta">{pushLoading() ? "..." : pushOn() ? "On" : "Off"}</span>
+          <span class="meta">{pushLoading() ? "..." : pushOn() ? "This phone" : "Off"}</span>
         </button>
         {/* only show when there is already a passphrase set */}
         <Show when={bioSupported() && unlockMethod() !== "biometrics"}>

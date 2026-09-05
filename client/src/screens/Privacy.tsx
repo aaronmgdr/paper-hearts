@@ -43,8 +43,9 @@ export default function Privacy() {
           <p>
             An encrypted entry stays on the relay for 30 days after it is written, then
             it is deleted. It has to outlive the moment your partner first reads it, so
-            that a second phone on the same account can still collect it. The relay
-            holds ciphertext throughout and never holds the key.
+            that a second phone on the same account can still collect it — your partner's
+            entries and your own. The relay holds ciphertext throughout and never holds
+            the key.
           </p>
         </section>
 
