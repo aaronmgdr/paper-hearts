@@ -637,7 +637,11 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
       // Own rows are for the other handset; ack is how we tell the partner
       // path "this device has seen it". Acking our own writes is a no-op on
       // the relay (it only marks the partner's blobs).
-      if (author === "partner") idsToAck.push(entry.id);
+      //
+      // Only ack what actually moved. The relay no longer filters on acked_at,
+      // so every poll re-returns the whole retention window — acking all of it
+      // each time would post a few dozen ids every 30 seconds to no effect.
+      if (author === "partner" && changed) idsToAck.push(entry.id);
     } catch (e) {
       console.error("[fetchAndDecryptEntries] failed to decrypt entry:", e);
     }

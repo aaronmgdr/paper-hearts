@@ -48,7 +48,7 @@ describe("isStandalonePWA", () => {
         media: query,
         addEventListener: () => {},
         removeEventListener: () => {},
-      }) as MediaQueryList) as typeof window.matchMedia;
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
     expect(isStandalonePWA()).toBe(true);
   });
 });

@@ -154,6 +154,38 @@ describe("GET /api/entries", () => {
     expect(data.entries[0].author).toBe("partner");
   });
 
+  test("omits own entries unless the client asks for scope=all", async () => {
+    // A client from before the label existed files every returned row in the
+    // partner slot. On a day where only you had written, your own blob would
+    // come back and show up as your partner's, lifting the veil on nothing.
+    // The service worker keeps such a client alive for at least one session
+    // after a deploy, so partner-only stays the default.
+    const { initiator } = await createPair();
+    const dayId = todayDayId();
+
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("mine").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    const legacy = await authGet(
+      `/api/entries?since=${dayId}`,
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    expect(legacy.data.entries).toHaveLength(0);
+
+    const modern = await authGet(
+      `/api/entries?since=${dayId}&scope=all`,
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    expect(modern.data.entries).toHaveLength(1);
+    expect(modern.data.entries[0].author).toBe("me");
+  });
+
   test("returns own entries so a second phone on this account can collect them", async () => {
     const { initiator, follower } = await createPair();
     const dayId = todayDayId();
@@ -164,7 +196,7 @@ describe("GET /api/entries", () => {
     await authPost("/api/entries", { dayId, payload: theirs }, follower.publicKey, follower.secretKey);
 
     const { status, data } = await authGet(
-      `/api/entries?since=${dayId}`,
+      `/api/entries?since=${dayId}&scope=all`,
       initiator.publicKey,
       initiator.secretKey
     );
@@ -176,7 +208,7 @@ describe("GET /api/entries", () => {
     expect(byAuthor.partner).toBe(theirs);
 
     const asFollower = await authGet(
-      `/api/entries?since=${dayId}`,
+      `/api/entries?since=${dayId}&scope=all`,
       follower.publicKey,
       follower.secretKey
     );
