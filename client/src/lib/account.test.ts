@@ -17,7 +17,7 @@ vi.mock("./storage", () => ({
   clearAllLocalData: async () => { identity = null; days = {}; },
 }));
 
-const { createIdentity, buildAccountBundle, installAccountBundle, unlock, publicKey, isPaired, partnerName } =
+const { createIdentity, buildAccountBundle, installAccountBundle, unlock, publicKey, isPaired, partnerName, mergeRelayedEntry } =
   await import("./store");
 const crypto = await import("./crypto");
 
@@ -163,5 +163,43 @@ describe("account bundle", () => {
       installAccountBundle({ ...bundle, secretKey: "" }, "pass")
     ).rejects.toThrow(/missing its keys/i);
   });
+});
 
+describe("mergeRelayedEntry", () => {
+  const day = (entries: DayFile["entries"]): DayFile => ({ entries });
+  const mine = (payload: string, timestamp: string): DayFile["entries"][0] => ({
+    dayId: "2026-09-05",
+    author: "me",
+    payload,
+    timestamp,
+  });
+
+  test("adds a missing author", () => {
+    const file = day([]);
+    expect(mergeRelayedEntry(file, mine("hello", "2026-09-05T12:00:00Z"))).toBe(true);
+    expect(file.entries).toHaveLength(1);
+    expect(file.entries[0].payload).toBe("hello");
+  });
+
+  test("keeps a newer local write instead of an older copy from the other phone", () => {
+    const file = day([mine("phone A", "2026-09-05T13:00:00Z")]);
+    expect(mergeRelayedEntry(file, mine("phone B earlier", "2026-09-05T12:00:00Z"))).toBe(false);
+    expect(file.entries[0].payload).toBe("phone A");
+  });
+
+  test("takes the other phone's write when it is newer", () => {
+    const file = day([mine("stale", "2026-09-05T12:00:00Z")]);
+    expect(mergeRelayedEntry(file, mine("fresh", "2026-09-05T14:00:00Z"))).toBe(true);
+    expect(file.entries[0].payload).toBe("fresh");
+  });
+
+  test("does not clobber the partner slot when merging own entries", () => {
+    const file = day([
+      mine("mine", "2026-09-05T12:00:00Z"),
+      { dayId: "2026-09-05", author: "partner", payload: "theirs", timestamp: "2026-09-05T12:00:00Z" },
+    ]);
+    mergeRelayedEntry(file, mine("updated", "2026-09-05T13:00:00Z"));
+    expect(file.entries.find((e) => e.author === "partner")?.payload).toBe("theirs");
+    expect(file.entries.find((e) => e.author === "me")?.payload).toBe("updated");
+  });
 });

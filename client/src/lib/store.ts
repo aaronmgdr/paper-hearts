@@ -33,18 +33,26 @@ export async function refreshPendingCount(): Promise<void> {
   setPendingCount(items.length);
 }
 
+function refreshFromRelay(): void {
+  if (!isPaired()) return;
+  flushOutbox().catch(console.error);
+  fetchAndDecryptEntries(getSyncSince())
+    .then(() => bumpEntriesVersion())
+    .catch(console.error);
+}
+
 export function setupNetworkListeners(): void {
   window.addEventListener("online", () => {
     setIsOnline(true);
     console.info("Network reconnected, flushing outbox and refreshing entries");
-    if (isPaired()) {
-      flushOutbox().catch(console.error);
-      fetchAndDecryptEntries(getSyncSince())
-        .then(() => bumpEntriesVersion())
-        .catch(console.error);
-    }
+    refreshFromRelay();
   });
   window.addEventListener("offline", () => setIsOnline(false));
+  // A second phone has no push of its own (notifications stay on one device),
+  // so opening it — or coming back from the background — is when it catches up.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshFromRelay();
+  });
 }
 
 // ── Helpers (moved from storage.ts to avoid its crypto dependency) ──
@@ -465,11 +473,12 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
   // Save locally — one entry per day, replace any existing "me" entry
   const existing = (await storage.loadDay(dayId)) || { entries: [] };
   const idx = existing.entries.findIndex((e) => e.author === "me");
+  const timestamp = new Date().toISOString();
   const entry: storage.StoredEntry = {
     dayId,
     author: "me",
     payload: text,
-    timestamp: new Date().toISOString(),
+    timestamp,
   };
   if (idx >= 0) {
     existing.entries[idx] = entry;
@@ -486,7 +495,7 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
   const plaintext = JSON.stringify({
     text,
     format: "markdown",
-    timestamp: new Date().toISOString(),
+    timestamp,
   });
 
   const encrypted = crypto.encrypt(plaintext, ss);
@@ -538,6 +547,29 @@ export async function updateEntry(text: string, dayId: string): Promise<void> {
   import("./backup").then((m) => m.refreshRecoveryBackup()).catch(console.error);
 }
 
+/**
+ * Fold a relayed entry into a day's local file. Same author+day: keep the
+ * newer timestamp so a phone that has written (or still has an unflushed
+ * outbox item) is not rolled back by an older copy from the other handset.
+ */
+export function mergeRelayedEntry(
+  existing: storage.DayFile,
+  incoming: storage.StoredEntry
+): boolean {
+  const idx = existing.entries.findIndex((e) => e.author === incoming.author);
+  if (idx < 0) {
+    existing.entries.push(incoming);
+    return true;
+  }
+  const current = existing.entries[idx];
+  if (incoming.timestamp < current.timestamp) return false;
+  if (incoming.payload === current.payload && incoming.timestamp === current.timestamp) {
+    return false;
+  }
+  existing.entries[idx] = incoming;
+  return true;
+}
+
 export async function fetchAndDecryptEntries(since: string): Promise<void> {
   console.log("[fetchAndDecryptEntries] fetching entries since", since);
   const pk = publicKey();
@@ -559,24 +591,20 @@ export async function fetchAndDecryptEntries(since: string): Promise<void> {
       const parsed = JSON.parse(plainJson);
 
       const dayId = entry.dayId;
+      const author: storage.StoredEntry["author"] = entry.author === "me" ? "me" : "partner";
       const existing = (await storage.loadDay(dayId)) || { entries: [] };
-
-      // One partner entry per day — replace any existing one (handles edits/updates)
-      const partnerIdx = existing.entries.findIndex((e) => e.author === "partner");
-      const partnerEntry: storage.StoredEntry = {
+      const changed = mergeRelayedEntry(existing, {
         dayId,
-        author: "partner",
+        author,
         payload: parsed.text,
         timestamp: parsed.timestamp,
-      };
-      if (partnerIdx >= 0) {
-        existing.entries[partnerIdx] = partnerEntry;
-      } else {
-        existing.entries.push(partnerEntry);
-      }
-      await storage.saveDay(dayId, existing);
+      });
+      if (changed) await storage.saveDay(dayId, existing);
 
-      idsToAck.push(entry.id);
+      // Own rows are for the other handset; ack is how we tell the partner
+      // path "this device has seen it". Acking our own writes is a no-op on
+      // the relay (it only marks the partner's blobs).
+      if (author === "partner") idsToAck.push(entry.id);
     } catch (e) {
       console.error("[fetchAndDecryptEntries] failed to decrypt entry:", e);
     }
