@@ -77,7 +77,9 @@ export default function Privacy() {
           <p>
             Settings → Add another phone copies this account onto a new device. That is
             how you replace a phone, not how you recover from losing every device —
-            that is what a backup file or recovery code is for.
+            that is what a backup file or recovery code is for. On iPhone, add Paper
+            Hearts to the Home Screen first and paste the link inside that app — a
+            Camera scan opens Safari, which does not keep the same diary.
           </p>
         </section>
 

@@ -41,6 +41,42 @@ export interface DeviceLinkSession {
   url: string;
 }
 
+/**
+ * Accept a raw mailbox token, a `/device-link?token=` path, or a full URL.
+ * iPhone Camera opens Safari instead of the Home Screen app, so the receiving
+ * phone often pastes this by hand rather than following a scanned link.
+ */
+export function parseDeviceLinkToken(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  const fromQuery = (value: string): string | undefined => {
+    const match = value.match(/[?&]token=([^&]+)/);
+    if (!match) return undefined;
+    try {
+      return decodeURIComponent(match[1].replace(/\+/g, " ")) || undefined;
+    } catch {
+      return match[1] || undefined;
+    }
+  };
+
+  try {
+    const url = new URL(trimmed);
+    const fromSearch = url.searchParams.get("token");
+    if (fromSearch) return fromSearch;
+  } catch {
+    // Not an absolute URL — fall through to query / raw token.
+  }
+
+  const queried = fromQuery(trimmed);
+  if (queried) return queried;
+
+  // Device-link tokens are 32 random bytes, URL-safe base64 (no padding).
+  if (/^[A-Za-z0-9_-]{16,}$/.test(trimmed)) return trimmed;
+  return undefined;
+}
+
 /** Existing phone: open a mailbox and get the link to hand over. */
 export async function startDeviceLink(): Promise<DeviceLinkSession> {
   const pk = publicKey();

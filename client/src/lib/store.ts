@@ -33,12 +33,36 @@ export async function refreshPendingCount(): Promise<void> {
   setPendingCount(items.length);
 }
 
+const REFRESH_DEBOUNCE_MS = 2000;
+const FOREGROUND_POLL_MS = 30_000;
+
+let lastRelayRefresh = 0;
+let foregroundPoll: ReturnType<typeof setInterval> | undefined;
+
 function refreshFromRelay(): void {
   if (!isPaired()) return;
+  const now = Date.now();
+  // iOS fires visibilitychange + pageshow + focus together when returning
+  // from the app switcher; one fetch is enough.
+  if (now - lastRelayRefresh < REFRESH_DEBOUNCE_MS) return;
+  lastRelayRefresh = now;
   flushOutbox().catch(console.error);
   fetchAndDecryptEntries(getSyncSince())
     .then(() => bumpEntriesVersion())
     .catch(console.error);
+}
+
+function startForegroundPoll(): void {
+  if (foregroundPoll) return;
+  foregroundPoll = setInterval(() => {
+    if (document.visibilityState === "visible") refreshFromRelay();
+  }, FOREGROUND_POLL_MS);
+}
+
+function stopForegroundPoll(): void {
+  if (!foregroundPoll) return;
+  clearInterval(foregroundPoll);
+  foregroundPoll = undefined;
 }
 
 export function setupNetworkListeners(): void {
@@ -48,11 +72,20 @@ export function setupNetworkListeners(): void {
     refreshFromRelay();
   });
   window.addEventListener("offline", () => setIsOnline(false));
-  // A second phone has no push of its own (notifications stay on one device),
-  // so opening it — or coming back from the background — is when it catches up.
+  // A second phone has no Background Sync and often no push of its own
+  // (notifications stay on one device). iOS also freezes timers in the
+  // background, so catch-up happens on open, foreground, and a poll while visible.
+  const onForeground = () => {
+    refreshFromRelay();
+    startForegroundPoll();
+  };
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refreshFromRelay();
+    if (document.visibilityState === "visible") onForeground();
+    else stopForegroundPoll();
   });
+  window.addEventListener("pageshow", onForeground);
+  window.addEventListener("focus", () => refreshFromRelay());
+  if (document.visibilityState === "visible") startForegroundPoll();
 }
 
 // ── Helpers (moved from storage.ts to avoid its crypto dependency) ──
