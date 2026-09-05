@@ -18,7 +18,7 @@ function startSyncedSession() {
   syncStarted = true;
   listenForSyncMessages();
   // registerPush().catch(console.error); [Violation] Only request notification permission in response to a user gesture.
-  fetchAndDecryptEntries(getSyncSince()).catch(console.error);
+  fetchAndDecryptEntries(getSyncSince(), { sync: "full" }).catch(console.error);
   flushOutbox().catch(console.error);
 }
 

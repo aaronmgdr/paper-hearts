@@ -219,6 +219,75 @@ describe("GET /api/entries", () => {
     expect(followerView.partner).toBe(mine);
   });
 
+  test("changedSince narrows the reply to what has actually moved", async () => {
+    // Without this the foreground poll re-sends the whole retention window
+    // every 30 seconds.
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("first").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    const first = await authGet(
+      `/api/entries?since=1970-01-01&scope=all`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(first.data.entries).toHaveLength(1);
+    const cursor = first.data.nextChangedSince as string;
+    expect(cursor).toBeDefined();
+
+    // Nothing has changed, but the cursor is rewound for safety, so the reply
+    // is allowed to repeat that entry — it must not grow beyond it.
+    const repeat = await authGet(
+      `/api/entries?since=1970-01-01&scope=all&changedSince=${encodeURIComponent(
+        new Date(Date.now() + 60_000).toISOString()
+      )}`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(repeat.data.entries).toHaveLength(0);
+
+    // An edit moves updated_at, so a day already delivered comes back.
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("edited").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    const afterEdit = await authGet(
+      `/api/entries?since=1970-01-01&scope=all&changedSince=${encodeURIComponent(cursor)}`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(afterEdit.data.entries).toHaveLength(1);
+    expect(afterEdit.data.entries[0].payload).toBe(Buffer.from("edited").toString("base64"));
+  });
+
+  test("an unusable cursor falls back to the full window", async () => {
+    // Treating a bad cursor as "up to date" would strand the device silently.
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("hello").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    const { data } = await authGet(
+      `/api/entries?since=1970-01-01&scope=all&changedSince=not-a-date`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(data.entries).toHaveLength(1);
+  });
+
   test("returns empty array when no entries", async () => {
     const { follower } = await createPair();
 
