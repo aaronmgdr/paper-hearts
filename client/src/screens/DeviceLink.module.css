@@ -44,3 +44,18 @@
   color: var(--dusty-mauve);
   margin: 0 0 var(--space-2);
 }
+
+.steps {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  text-align: left;
+  max-width: 34ch;
+  margin: 0 0 var(--space-3);
+  padding-left: 1.25em;
+}
+
+.steps li + li {
+  margin-top: 0.4em;
+}

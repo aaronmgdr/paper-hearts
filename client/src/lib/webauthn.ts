@@ -1,3 +1,5 @@
+import { isIOS } from "./platform";
+
 // WebAuthn PRF extension helpers for biometric unlock
 
 /** Fixed salt used for PRF evaluation — must never change once deployed. */
@@ -25,9 +27,25 @@ export async function isPrfSupported(): Promise<boolean> {
     await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
   if (!platformAvailable) return false;
 
-  // Check if the browser supports the PRF extension at all
-  // (We can't know for sure without creating a credential, but we can check
-  // if the API shape exists)
+  // Face ID counts as a platform authenticator, but Safari/iOS does not
+  // implement WebAuthn PRF. Offering "Use biometrics" there only fails later.
+  if (isIOS()) {
+    const getCaps = (
+      PublicKeyCredential as typeof PublicKeyCredential & {
+        getClientCapabilities?: () => Promise<{ prf?: boolean }>;
+      }
+    ).getClientCapabilities;
+    if (typeof getCaps !== "function") return false;
+    try {
+      const caps = await getCaps.call(PublicKeyCredential);
+      return caps.prf === true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Other browsers: a platform authenticator is a strong enough hint to offer
+  // the choice. Registration still fails closed if PRF is missing.
   return true;
 }
 

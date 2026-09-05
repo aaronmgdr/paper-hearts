@@ -8,6 +8,7 @@ import type { WatchHandle } from "../lib/relay";
 import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHandshake, startWatchingForPartner, unlock, unlockWithPrf, unlockMethod, uploadHistoryBundleOverWs, collectHistoryBundle } from "../lib/store";
 import { isPrfSupported } from "../lib/webauthn";
 import { registerPush } from "../lib/push";
+import { isIOS, isStandalonePWA } from "../lib/platform";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
@@ -242,6 +243,12 @@ export default function Onboarding() {
             </Show>
             <h1 class={styles.heading}>{relink ? "Re-add your partner" : "Start your diary"}</h1>
             <p class={styles.sub}>{relink ? "Generate a code for your partner to scan on their new device." : "Paper Hearts is a private shared diary for two."}</p>
+            <Show when={!relink && isIOS() && !isStandalonePWA()}>
+              <p class={styles.qrWarning}>
+                On iPhone, add this site to your Home Screen and open it from the icon
+                before you start — Safari and the Home Screen app do not share a diary.
+              </p>
+            </Show>
            
             <div class={styles.actions}>
               <Show
@@ -261,6 +268,9 @@ export default function Onboarding() {
               </Show>
             </div>
              <Show when={!relink}>
+              <button class={styles.linkButton} onClick={() => navigate("/device-link")}>
+                This is a second phone
+              </button>
               <button class={styles.linkButton} onClick={() => navigate("/restore")}>
                 I already have a diary to restore
               </button>
