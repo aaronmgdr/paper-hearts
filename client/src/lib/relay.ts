@@ -86,7 +86,10 @@ export async function getEntries(
   publicKey: Uint8Array,
   secretKey: Uint8Array
 ) {
-  const path = `${BASE}/entries?since=${since}`;
+  // scope=all asks for this account's own entries alongside the partner's, so
+  // a second phone sees what the first one wrote. The relay only sends them
+  // when asked — older clients file every row in the partner slot.
+  const path = `${BASE}/entries?since=${since}&scope=all`;
   const headers = await signedHeaders("GET", path, null, publicKey, secretKey);
   const res = await fetch(path, { method: "GET", headers });
   return { status: res.status, data: await res.json() };

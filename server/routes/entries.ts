@@ -67,14 +67,20 @@ export async function createEntry(req: Request, path: string): Promise<Response>
 }
 
 /**
- * GET /api/entries?since={dayId}
- * Authenticated. Fetch entries in this pair — the partner's, and your own.
+ * GET /api/entries?since={dayId}&scope=all
+ * Authenticated. Fetch the partner's entries, and with `scope=all` your own.
  *
- * Own entries have to come back too: a second phone on the same account never
- * sees what the first one wrote otherwise, because those blobs are authored by
- * this public key and used to be filtered out. Two phones share a key, not a
- * user row, so this is the only way they stay in sync after the initial copy.
+ * Own entries have to come back for a second phone to work at all: those blobs
+ * are authored by this public key, and two phones share a key rather than a
+ * user row, so filtering them out leaves the second handset permanently blank.
  * Clients label each row `me` or `partner` and merge by author+day.
+ *
+ * `scope=all` is opt-in because clients before it ignored the label and filed
+ * every returned row in the partner slot. The service worker precaches the app
+ * shell and only swaps on SKIP_WAITING, so a cached older client keeps talking
+ * to a new relay for at least one session — and on a day where only you had
+ * written, your own blob would show up as your partner's and lift the veil.
+ * Defaulting to partner-only keeps those clients correct until they update.
  */
 export async function getEntries(req: Request, path: string): Promise<Response> {
   let auth;
@@ -89,18 +95,21 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
 
   const url = new URL(req.url);
   const since = url.searchParams.get("since") || "1970-01-01";
-  console.log(`[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since}`);
+  const includeOwn = url.searchParams.get("scope") === "all";
+  console.log(
+    `[getEntries] user=${auth.publicKey.slice(0, 8)}… since=${since} scope=${includeOwn ? "all" : "partner"}`
+  );
 
   // Everything in this pair inside the retention window, acknowledged or not.
   // Filtering on acked_at would hide an entry from a second device as soon as
-  // the first collected it. Filtering out author_key = self would hide this
-  // account's own writes from its other phone.
+  // the first collected it.
   const entries = await sql`
     SELECT id, author_key, day_id, payload, fetched_at FROM entries
     WHERE pair_id = ${auth.pairId}
       AND day_id >= ${since}
       AND created_at > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
-    ORDER BY day_id ASC
+      AND (${includeOwn} OR author_key != ${auth.publicKey})
+    ORDER BY day_id ASC, author_key ASC
   `;
 
   // Mark as fetched

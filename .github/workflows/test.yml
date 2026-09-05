@@ -60,3 +60,9 @@ jobs:
 
       - name: Run tests
         run: bun run --cwd client test
+
+      # `bun run build` is `tsc -b && vite build`, and it is what Railway runs
+      # on deploy. Running only the tests let a type error through that broke
+      # the build while CI stayed green.
+      - name: Build
+        run: bun run --cwd client build

@@ -125,4 +125,36 @@ describe("fetchAndDecryptEntries — second phone", () => {
     expect(byAuthor.partner).toBe("partner's words");
     expect(mockAckEntries).toHaveBeenCalledWith(["theirs"], publicKey(), secretKey());
   });
+
+  test("a repeat poll of unchanged entries acks nothing", async () => {
+    // The relay no longer filters on acked_at, so every poll re-returns the
+    // whole retention window. Acking all of it each time would post a few
+    // dozen ids every 30 seconds to no effect.
+    await createIdentity("passphrase");
+    const partner = crypto.generateKeyPair();
+    await completeInitiatorPairing(crypto.toBase64(partner.publicKey));
+
+    const ss = crypto.computeSharedSecret(secretKey()!, publicKey()!, partner.publicKey);
+    const theirs = crypto.encrypt(
+      JSON.stringify({ text: "partner's words", format: "markdown", timestamp: "2026-09-05T18:30:00Z" }),
+      ss
+    );
+
+    mockGetEntries.mockResolvedValue({
+      status: 200,
+      data: {
+        entries: [
+          { id: "theirs", dayId: "2026-09-05", payload: crypto.toBase64(theirs), author: "partner" },
+        ],
+      },
+    });
+
+    await fetchAndDecryptEntries("2026-09-01");
+    expect(mockAckEntries).toHaveBeenCalledTimes(1);
+
+    mockAckEntries.mockClear();
+    await fetchAndDecryptEntries("2026-09-01");
+    expect(mockAckEntries).not.toHaveBeenCalled();
+    expect(days["2026-09-05"].entries[0].payload).toBe("partner's words");
+  });
 });
