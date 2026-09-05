@@ -11,10 +11,11 @@ import {
   claimDeviceLink,
   awaitAccountBundle,
   adoptAccount,
+  parseDeviceLinkToken,
 } from "../lib/devicelink";
 import type { AccountBundle } from "../lib/store";
 import { unlock, unlockWithPrf, unlockMethod } from "../lib/store";
-import { registerPush } from "../lib/push";
+import { isIOS, isStandalonePWA } from "../lib/platform";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
@@ -32,34 +33,52 @@ const qrCode: QRSVGProps = {
 };
 
 type SendStep = "auth" | "share" | "verify" | "sending" | "done";
-type ReceiveStep = "checking" | "warn-replace" | "verify" | "waiting" | "protect" | "done";
+type ReceiveStep = "paste" | "checking" | "warn-replace" | "verify" | "protect" | "add-to-home" | "done";
+type Side = "loading" | "send" | "receive";
 
 export default function DeviceLink() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const incomingToken = () => (searchParams.token as string) || "";
-  const receiving = () => !!incomingToken();
+  const urlToken = () => parseDeviceLinkToken(searchParams.token as string) ?? "";
+  const [side, setSide] = createSignal<Side>("loading");
 
   const [error, setError] = createSignal("");
   const [loading, setLoading] = createSignal(false);
+
+  onMount(async () => {
+    if (urlToken()) {
+      setSide("receive");
+      return;
+    }
+    const { loadIdentity } = await import("../lib/storage");
+    // A blank phone visiting /device-link is here to join, not to send.
+    setSide((await loadIdentity()) ? "send" : "receive");
+  });
+
+  const receiving = () => side() === "receive";
 
   return (
     <div class="page">
       <BackButton href={receiving() ? "/onboarding" : "/settings"} />
       <div class={styles.center}>
-        <Show
-          when={receiving()}
-          fallback={<SendSide error={error} setError={setError} loading={loading} setLoading={setLoading} />}
-        >
-          <ReceiveSide
-            token={incomingToken()}
-            error={error}
-            setError={setError}
-            loading={loading}
-            setLoading={setLoading}
-            onDone={() => navigate("/", { replace: true })}
-          />
-        </Show>
+        <Switch>
+          <Match when={side() === "loading"}>
+            <div />
+          </Match>
+          <Match when={side() === "send"}>
+            <SendSide error={error} setError={setError} loading={loading} setLoading={setLoading} />
+          </Match>
+          <Match when={side() === "receive"}>
+            <ReceiveSide
+              initialToken={urlToken()}
+              error={error}
+              setError={setError}
+              loading={loading}
+              setLoading={setLoading}
+              onDone={() => navigate("/", { replace: true })}
+            />
+          </Match>
+        </Switch>
       </div>
     </div>
   );
@@ -131,6 +150,16 @@ function SendSide(props: SideProps) {
     }
   }
 
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      props.setError("Couldn't copy. Long-press the link instead.");
+    }
+  }
+
   return (
     <Switch>
       <Match when={step() === "auth"}>
@@ -179,27 +208,31 @@ function SendSide(props: SideProps) {
           <QRCodeSVG {...qrCode} value={link()} />
         </div>
         <p class={local.status}>Waiting for your other phone…</p>
-        <button
-          class="btn-primary"
-          onClick={async () => {
-            if (navigator.share) {
-              await navigator.share({ url: link() }).catch(() => {});
-            } else {
-              navigator.clipboard.writeText(link());
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }
-          }}
-        >
-          {copied() ? "Copied!" : "Share link"}
-        </button>
+        <div class={styles.actions}>
+          <button class="btn-primary" onClick={copyLink}>
+            {copied() ? "Copied!" : "Copy link"}
+          </button>
+          <Show when={!!navigator.share}>
+            <button
+              class="btn-secondary"
+              onClick={() => navigator.share({ url: link() }).catch(() => {})}
+            >
+              Share…
+            </button>
+          </Show>
+        </div>
+        <p class={styles.qrWarning}>
+          On iPhone: add Paper Hearts to the Home Screen first, open it from the
+          icon, then paste this link there. The Camera app opens Safari, which
+          is a separate copy of the app and will not keep the diary.
+        </p>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
           <button class="btn-secondary" onClick={handleAuth} disabled={props.loading()}>
             Start again
           </button>
         </Show>
-        <p class={styles.qrWarning}>
+        <p class={local.warning}>
           This link carries your whole diary to whichever device opens it. Only open it on a
           phone that is yours.
         </p>
@@ -239,8 +272,10 @@ function SendSide(props: SideProps) {
 }
 
 /** The phone that is joining an existing account. */
-function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
-  const [step, setStep] = createSignal<ReceiveStep>("checking");
+function ReceiveSide(props: SideProps & { initialToken: string; onDone: () => void }) {
+  const [step, setStep] = createSignal<ReceiveStep>(props.initialToken ? "checking" : "paste");
+  const [token, setToken] = createSignal(props.initialToken);
+  const [paste, setPaste] = createSignal("");
   const [verifyCode, setVerifyCode] = createSignal("");
   const [bundle, setBundle] = createSignal<AccountBundle | null>(null);
   const [passphrase, setPassphrase] = createSignal("");
@@ -253,26 +288,45 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
     const { loadIdentity } = await import("../lib/storage");
     // Adopting an account replaces whatever identity is on this phone. On a
     // fresh install there is nothing to lose; anywhere else, say so first.
-    setStep((await loadIdentity()) ? "warn-replace" : "checking");
-    if (step() === "checking") await beginClaim();
+    if (await loadIdentity()) {
+      setStep("warn-replace");
+      return;
+    }
+    if (token()) await beginClaim();
   });
 
+  async function handlePaste() {
+    const parsed = parseDeviceLinkToken(paste());
+    if (!parsed) {
+      props.setError("That doesn't look like a device-link. Paste the whole link, or the token from it.");
+      return;
+    }
+    setToken(parsed);
+    await beginClaim();
+  }
+
   async function beginClaim() {
+    const t = token();
+    if (!t) {
+      setStep("paste");
+      return;
+    }
     props.setLoading(true);
     props.setError("");
+    setStep("checking");
     try {
-      const result = await claimDeviceLink(props.token);
+      const result = await claimDeviceLink(t);
       setVerifyCode(result.verificationCode);
       setStep("verify");
       stopPolling = awaitAccountBundle(
-        props.token,
+        t,
         result.keys,
         (b) => { setBundle(b); setStep("protect"); },
         (err) => props.setError(err.message)
       );
     } catch (e: any) {
       props.setError(e.message || "That link didn't work.");
-      setStep("checking");
+      setStep(t ? "checking" : "paste");
     } finally {
       props.setLoading(false);
     }
@@ -291,9 +345,14 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
     props.setError("");
     try {
       await adoptAccount(bundle()!, passphrase());
-      registerPush().catch(console.error);
-      setStep("done");
-      setTimeout(props.onDone, 1500);
+      // Do not register push here. One subscription per account — enabling
+      // notifications on this phone would silently take them off the other.
+      if (isIOS() && !isStandalonePWA()) {
+        setStep("add-to-home");
+      } else {
+        setStep("done");
+        setTimeout(props.onDone, 1500);
+      }
     } catch (e: any) {
       props.setError(e.message || "Couldn't set up this phone.");
     } finally {
@@ -301,8 +360,58 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
     }
   }
 
+  function continueAfterReplace() {
+    if (token()) void beginClaim();
+    else setStep("paste");
+  }
+
   return (
     <Switch>
+      <Match when={step() === "paste"}>
+        <h1 class={styles.heading}>This is a second phone</h1>
+        <Show when={isIOS() && !isStandalonePWA()}>
+          <p class={styles.sub}>
+            You're in Safari. iPhone keeps Safari and the Home Screen app separate —
+            finish there, not here.
+          </p>
+          <ol class={local.steps}>
+            <li>Tap Share, then Add to Home Screen.</li>
+            <li>Open Paper Hearts from the icon.</li>
+            <li>Come back to this screen and paste the link.</li>
+          </ol>
+        </Show>
+        <Show when={!isIOS() || isStandalonePWA()}>
+          <p class={styles.sub}>
+            Paste the link from your other phone. Either phone can write after this;
+            open this one to pick up new entries.
+          </p>
+        </Show>
+        <div class={unlockStyles.form}>
+          <input
+            type="text"
+            class={unlockStyles.input}
+            placeholder="Paste the link here"
+            aria-label="Device link"
+            value={paste()}
+            onInput={(e) => setPaste(e.currentTarget.value)}
+            autofocus={isStandalonePWA() || !isIOS()}
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck={false}
+          />
+          <Show when={props.error()}>
+            <p class={unlockStyles.error} role="alert">{props.error()}</p>
+          </Show>
+          <button
+            class="btn-primary"
+            onClick={handlePaste}
+            disabled={props.loading() || !paste().trim()}
+          >
+            {props.loading() ? "Connecting..." : "Continue"}
+          </button>
+        </div>
+      </Match>
+
       <Match when={step() === "warn-replace"}>
         <h2 class={styles.heading}>Replace this diary?</h2>
         <p class={styles.sub}>
@@ -318,7 +427,7 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
         </Show>
         <div class={styles.actions}>
-          <button class="btn-primary" onClick={beginClaim} disabled={props.loading()}>
+          <button class="btn-primary" onClick={continueAfterReplace} disabled={props.loading()}>
             Continue
           </button>
           <button class="btn-secondary" onClick={props.onDone}>Cancel</button>
@@ -327,6 +436,13 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
 
       <Match when={step() === "checking"}>
         <h2 class={styles.heading}>{props.error() ? "Couldn't connect" : "Connecting…"}</h2>
+        <Show when={isIOS() && !isStandalonePWA() && !props.error()}>
+          <p class={styles.sub}>
+            If you opened this from Camera, you're in Safari. After the diary arrives,
+            add this page to the Home Screen — or cancel, install from the site first,
+            and paste the link inside the app.
+          </p>
+        </Show>
         <Show when={props.error()}>
           <p class={unlockStyles.error} role="alert">{props.error()}</p>
           <div class={styles.actions}>
@@ -389,6 +505,26 @@ function ReceiveSide(props: SideProps & { token: string; onDone: () => void }) {
             {props.loading() ? "Setting up..." : "Finish"}
           </button>
         </div>
+      </Match>
+
+      <Match when={step() === "add-to-home"}>
+        <h2 class={styles.heading}>Add this page to Home Screen</h2>
+        <p class={styles.sub}>
+          The diary is on this Safari tab. iPhone will not copy it to the Home Screen
+          icon unless you add it from here.
+        </p>
+        <ol class={local.steps}>
+          <li>Tap Share.</li>
+          <li>Add to Home Screen.</li>
+          <li>Open Paper Hearts from the new icon — not from Safari.</li>
+        </ol>
+        <p class={local.warning}>
+          If the icon opens an empty diary, you added it from the site instead of
+          this page. Open that icon, go to Add another phone, and paste the same link.
+        </p>
+        <button class={styles.linkButton} onClick={props.onDone}>
+          Continue in Safari anyway
+        </button>
       </Match>
 
       <Match when={step() === "done"}>

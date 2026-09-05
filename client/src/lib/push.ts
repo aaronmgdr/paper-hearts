@@ -1,5 +1,6 @@
 import { subscribePush, signedHeaders } from "./relay";
 import { publicKey, secretKey } from "./store";
+import { isIOS, isStandalonePWA } from "./platform";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -44,6 +45,8 @@ export async function unregisterPush(): Promise<void> {
  */
 export async function registerPush(): Promise<void> {
   if (!VAPID_PUBLIC_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  // iOS only delivers Web Push to a Home Screen web app, not Safari tabs.
+  if (isIOS() && !isStandalonePWA()) return;
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;

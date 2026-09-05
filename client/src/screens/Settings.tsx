@@ -3,6 +3,7 @@ import { A, useNavigate } from "@solidjs/router";
 import Nav from "../components/Nav";
 import { isPushEnabled, registerPush, unregisterPush, sendTestNotification } from "../lib/push";
 import { isPrfSupported } from "../lib/webauthn";
+import { isIOS, isStandalonePWA } from "../lib/platform";
 import { enableBiometrics, disableBiometrics, hasPrfCredential, breakupAndForget, changePassphrase, exportMonth, savePartnerName, checkConnectionHealth, unlockMethod, publicKey, partnerName } from "../lib/store";
 import type { ConnectionHealth } from "../lib/store";
 import styles from "./Settings.module.css";
@@ -224,9 +225,21 @@ export default function Settings() {
             </div>
           </form>
         </Show>
-        <button class={styles.item} onClick={togglePush} disabled={pushLoading()}>
+        <button
+          class={styles.item}
+          onClick={togglePush}
+          disabled={pushLoading() || (isIOS() && !isStandalonePWA())}
+        >
           <span>Notifications</span>
-          <span class="meta">{pushLoading() ? "..." : pushOn() ? "This phone" : "Off"}</span>
+          <span class="meta">
+            {pushLoading()
+              ? "..."
+              : isIOS() && !isStandalonePWA()
+                ? "Home Screen app only"
+                : pushOn()
+                  ? "This phone"
+                  : "Off"}
+          </span>
         </button>
         {/* only show when there is already a passphrase set */}
         <Show when={bioSupported() && unlockMethod() !== "biometrics"}>
