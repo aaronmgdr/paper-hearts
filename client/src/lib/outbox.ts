@@ -65,6 +65,18 @@ export async function replaceForDayId(dayId: string, payloadB64: string): Promis
   });
 }
 
+/** Drop every queued payload. Adopting another account must not flush the
+ *  previous identity's ciphertext under the new keys. */
+export async function clearOutbox(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
 export async function remove(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {

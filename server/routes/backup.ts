@@ -33,7 +33,12 @@ export async function putBackup(req: Request, path: string): Promise<Response> {
     throw e;
   }
 
-  const body = JSON.parse(new TextDecoder().decode(bodyBytes));
+  let body: { locator?: unknown; payload?: unknown };
+  try {
+    body = JSON.parse(new TextDecoder().decode(bodyBytes));
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { locator, payload } = body;
 
   if (typeof locator !== "string" || locator.length < 16 || locator.length > 128) {
@@ -51,19 +56,29 @@ export async function putBackup(req: Request, path: string): Promise<Response> {
   // One backup per account. Rotating the recovery code changes the locator, so
   // the old row has to go with it rather than linger as an orphan restorable
   // by a code the user believes they retired.
-  await sql.begin(async (tx) => {
+  //
+  // A locator collision across accounts is vanishingly unlikely (256-bit
+  // hash) but the previous upsert reassigned ownership and overwrote the
+  // victim's ciphertext. Refuse that instead of taking their row.
+  const stored = await sql.begin(async (tx) => {
     // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
     await tx`DELETE FROM backups WHERE owner_key = ${auth.publicKey} AND locator != ${locator}`;
     // @ts-expect-error — same
-    await tx`
+    const upserted = await tx`
       INSERT INTO backups (locator, owner_key, payload)
       VALUES (${locator}, ${auth.publicKey}, ${payloadBytes})
       ON CONFLICT (locator) DO UPDATE
         SET payload    = EXCLUDED.payload,
-            owner_key  = EXCLUDED.owner_key,
             updated_at = now()
+        WHERE backups.owner_key = EXCLUDED.owner_key
+      RETURNING locator
     `;
+    return upserted;
   });
+
+  if (stored.length === 0) {
+    return Response.json({ error: "This recovery code is already in use" }, { status: 409 });
+  }
 
   console.log(`[backup] stored owner=${auth.publicKey.slice(0, 8)}… bytes=${payloadBytes.length}`);
   return Response.json({ ok: true, updatedAt: new Date().toISOString() });
@@ -76,7 +91,7 @@ export async function putBackup(req: Request, path: string): Promise<Response> {
  */
 export async function getBackup(req: Request): Promise<Response> {
   const locator = new URL(req.url).searchParams.get("locator") || "";
-  if (locator.length < 16) {
+  if (locator.length < 16 || locator.length > 128) {
     return Response.json({ error: "locator is required" }, { status: 400 });
   }
 

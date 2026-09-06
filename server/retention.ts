@@ -1,7 +1,7 @@
 import sql from "./db";
 
 /**
- * How long an encrypted blob stays on the relay after it is written.
+ * How long an encrypted blob stays on the relay after it is last written or edited.
  *
  * Entries used to be deleted the instant the recipient acknowledged them. That
  * makes a second device on the same account unworkable — whichever phone polls
@@ -22,7 +22,7 @@ const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 export async function sweepExpiredEntries(): Promise<number> {
   const deleted = await sql`
     DELETE FROM entries
-    WHERE created_at < now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
+    WHERE GREATEST(created_at, updated_at) < now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
     RETURNING id
   `;
   if (deleted.length > 0) {

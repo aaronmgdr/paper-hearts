@@ -1,5 +1,6 @@
 import * as relay from "./relay";
 import { buildAccountBundle, installAccountBundle, publicKey, secretKey } from "./store";
+import { flushOutbox } from "./sync";
 import type { AccountBundle } from "./store";
 import type { BoxKeyPair } from "./crypto";
 
@@ -148,6 +149,10 @@ export async function sendAccountBundle(
   if (!pk || !sk) throw new Error("Unlock your diary first");
 
   const crypto = await loadCrypto();
+  // Local days are already on disk, but the relay only has what this phone
+  // has flushed. A phone lost before the next poll would leave the new one
+  // without those writes.
+  await flushOutbox().catch((e) => console.info("[devicelink] outbox flush deferred:", e));
   const bundle = await buildAccountBundle();
   const sealed = crypto.seal(
     JSON.stringify(bundle),

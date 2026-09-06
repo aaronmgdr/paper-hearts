@@ -115,6 +115,35 @@ describe("recovery backup", () => {
     expect((await anonGet(`/api/backup?locator=${loc}`)).status).toBe(404);
   });
 
+  test("cannot overwrite another account's backup by locator", async () => {
+    const { initiator } = await createPair();
+    const other = (await createPair()).initiator;
+    const loc = locator();
+
+    await authPut(
+      "/api/backup",
+      { locator: loc, payload: payload("mine") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+
+    const clash = await authPut(
+      "/api/backup",
+      { locator: loc, payload: payload("stolen") },
+      other.publicKey,
+      other.secretKey
+    );
+    expect(clash.status).toBe(409);
+
+    const got = await anonGet(`/api/backup?locator=${encodeURIComponent(loc)}`);
+    expect(Buffer.from(got.data.payload, "base64").toString()).toBe("mine");
+  });
+
+  test("rejects a locator too long on read as well as write", async () => {
+    const long = "a".repeat(200);
+    expect((await anonGet(`/api/backup?locator=${long}`)).status).toBe(400);
+  });
+
   test("rejects a locator too short to be a real one", async () => {
     const { initiator } = await createPair();
     const short = await authPut(

@@ -3,7 +3,7 @@ import type { EncryptedKey, PrfEncryptedKey } from "./crypto";
 import * as relay from "./relay";
 import * as storage from "./storage";
 import { getSyncSince, formatDayLabel } from "./dayid";
-import { enqueue, replaceForDayId, peekAll } from "./outbox";
+import { enqueue, replaceForDayId, peekAll, clearOutbox } from "./outbox";
 import { flushOutbox, requestBackgroundSync } from "./sync";
 import { registerPrfCredential, authenticateWithPrf } from "./webauthn";
 
@@ -297,8 +297,15 @@ export async function initiateHandshake(): Promise<{ relayToken: string; pairId:
   const identity = await storage.loadIdentity();
   if (identity) {
     identity.pairId = data.pairId;
+    // A re-link creates a new pair. Encrypting to the previous partner while
+    // waiting for the new one to join would file undecryptable blobs in that
+    // pair — the silent-failure mode this branch exists to stop. The partner
+    // key is written back in completeInitiatorPairing.
+    identity.partnerPublicKey = null;
     await storage.saveIdentity(identity);
   }
+  setSharedSecret(null);
+  setIsPaired(false);
 
   return { relayToken: data.relayToken, pairId: data.pairId };
 }
@@ -327,6 +334,7 @@ export async function joinHandshake(relayToken: string): Promise<{ partnerPublic
   } else {
     console.warn("[joinHandshake] no identity")
   }
+  await resetSyncCursor();
 
   return { partnerPublicKeyB64: data.partnerPublicKey };
 }
@@ -452,6 +460,7 @@ export async function completeInitiatorPairing(partnerPublicKeyB64: string): Pro
     identity.partnerPublicKey = partnerPublicKeyB64;
     await storage.saveIdentity(identity);
   }
+  await resetSyncCursor();
 }
 
 // ── Connection health ───────────────────────────────────────
@@ -999,6 +1008,14 @@ export async function installAccountBundle(
     }
     await storage.saveDay(dayId, existing);
   }
+
+  // The outbox holds ciphertext encrypted under the previous identity. Flushing
+  // it after adopt would upload those blobs as this account. Recovery settings
+  // wrap a code with the old secret key and would look enabled while being
+  // unable to refresh.
+  await clearOutbox();
+  await storage.saveSetting("paper-hearts:recovery-backup", JSON.stringify({ enabled: false }));
+  await refreshPendingCount();
 
   setPublicKey(pk);
   setSecretKey(sk);

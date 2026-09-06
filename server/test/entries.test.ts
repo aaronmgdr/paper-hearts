@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { startServer, stopServer } from "./setup";
 import { generateKeyPair, createPair, todayDayId, post, authPost, authGet } from "./helpers";
+import sql from "../db";
+import { sweepExpiredEntries } from "../retention";
 
 beforeAll(async () => {
   await startServer();
@@ -286,6 +288,42 @@ describe("GET /api/entries", () => {
       follower.secretKey
     );
     expect(data.entries).toHaveLength(1);
+  });
+
+  test("an edited entry stays collectable for 30 days from the edit", async () => {
+    // Retention used to key off created_at alone, so a day written a month
+    // ago and edited yesterday vanished from a second phone that hadn't opened.
+    const { initiator, follower } = await createPair();
+    const dayId = todayDayId();
+
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("original").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    await authPost(
+      "/api/entries",
+      { dayId, payload: Buffer.from("edited").toString("base64") },
+      initiator.publicKey,
+      initiator.secretKey
+    );
+    await sql`
+      UPDATE entries
+      SET created_at = now() - interval '31 days',
+          updated_at = now()
+      WHERE author_key = ${initiator.publicKey} AND day_id = ${dayId}
+    `;
+
+    const stillThere = await authGet(
+      `/api/entries?since=1970-01-01`,
+      follower.publicKey,
+      follower.secretKey
+    );
+    expect(stillThere.data.entries).toHaveLength(1);
+    expect(stillThere.data.entries[0].payload).toBe(Buffer.from("edited").toString("base64"));
+
+    expect(await sweepExpiredEntries()).toBe(0);
   });
 
   test("returns empty array when no entries", async () => {

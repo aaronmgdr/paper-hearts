@@ -133,9 +133,10 @@ export async function restoreFromRecoveryCode(recoveryCode: string): Promise<Acc
   try {
     return JSON.parse(crypto.decrypt(crypto.fromBase64(data.payload), key)) as AccountBundle;
   } catch {
-    // The locator matched, so the code is nearly right — a transcription slip
-    // in a character the normaliser doesn't fold, most likely.
-    throw new Error("That recovery code didn't unlock the backup. Check it and try again.");
+    // Locator and key are derived from the same normalised code, so a locator
+    // hit with a decrypt failure is a tampered or corrupt payload, not a
+    // near-miss transcription.
+    throw new Error("That backup could not be opened. Try again, or use a file backup.");
   }
 }
 
