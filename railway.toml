@@ -1,5 +1,5 @@
 [build]
-buildCommand = "bun install && bun run build && bun run migrate"
+buildCommand = "bun install && bun run build"
 
 [deploy]
 startCommand = "bun run deploy"

@@ -10,9 +10,5 @@
     "deploy": "bun run start",
     "test": "bun run --cwd client test & bun run --cwd server test",
     "migrate": "bun run --cwd server migrate"
-  },
-  "dependencies": {
-    "build": "^0.1.4",
-    "run": "^1.5.0"
   }
 }
