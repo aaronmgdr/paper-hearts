@@ -4,5 +4,4 @@ client/dist/
 .env.*
 !.env.test
 .DS_Store
-bun.lock
 server/dist
