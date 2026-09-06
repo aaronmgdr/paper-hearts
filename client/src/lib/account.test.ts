@@ -5,6 +5,8 @@ import type { StoredIdentity, DayFile } from "./storage";
 // test here, not the storage backend.
 let identity: StoredIdentity | null = null;
 let days: Record<string, DayFile> = {};
+let settings: Record<string, string> = {};
+let outboxCleared = 0;
 
 vi.mock("./storage", () => ({
   saveIdentity: async (i: StoredIdentity) => { identity = structuredClone(i); },
@@ -12,9 +14,21 @@ vi.mock("./storage", () => ({
   saveDay: async (dayId: string, day: DayFile) => { days[dayId] = structuredClone(day); },
   loadDay: async (dayId: string) => (days[dayId] ? structuredClone(days[dayId]) : null),
   listDays: async () => Object.keys(days).sort().reverse(),
-  saveSetting: async () => {},
-  loadSetting: async () => null,
-  clearAllLocalData: async () => { identity = null; days = {}; },
+  saveSetting: async (key: string, value: string) => { settings[key] = value; },
+  loadSetting: async (key: string) => settings[key] ?? null,
+  clearAllLocalData: async () => { identity = null; days = {}; settings = {}; },
+}));
+
+vi.mock("./outbox", () => ({
+  enqueue: async () => {},
+  replaceForDayId: async () => false,
+  peekAll: async () => [],
+  clearOutbox: async () => { outboxCleared++; },
+}));
+
+vi.mock("./sync", () => ({
+  flushOutbox: async () => {},
+  requestBackgroundSync: async () => {},
 }));
 
 const { createIdentity, buildAccountBundle, installAccountBundle, unlock, publicKey, isPaired, partnerName, mergeRelayedEntry } =
@@ -24,6 +38,8 @@ const crypto = await import("./crypto");
 beforeEach(async () => {
   identity = null;
   days = {};
+  settings = {};
+  outboxCleared = 0;
   await crypto.init();
 });
 
@@ -86,6 +102,8 @@ describe("account bundle", () => {
     expect(await unlock("a new device passphrase")).toBe(true);
     expect(await unlock("correct horse battery")).toBe(false);
     expect(crypto.toBase64(publicKey()!)).toBe(originalKey);
+    expect(outboxCleared).toBe(1);
+    expect(JSON.parse(settings["paper-hearts:recovery-backup"]).enabled).toBe(false);
   });
 
   test("installing merges with what is already on the device", async () => {

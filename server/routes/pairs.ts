@@ -115,7 +115,7 @@ export async function join(req: Request): Promise<Response> {
 
   if (tokens.length === 0) {
     console.log(`[join] REJECTED: token not found`);
-    return Response.json({ error: "Invalid relay paring code" }, { status: 404 });
+    return Response.json({ error: "Invalid relay pairing code" }, { status: 404 });
   }
 
   const tokenRow = tokens[0];
@@ -151,14 +151,15 @@ export async function join(req: Request): Promise<Response> {
       { status: 410 }
     );
   }
-  const pairId = initiators[0].pair_id as string;
-  if (pairId !== tokenRow.pair_id) {
-    console.log(`[join] token pair ${tokenRow.pair_id} is stale; using initiator's current pair ${pairId}`);
+  if (initiators[0].pair_id !== tokenRow.pair_id) {
+    console.log(`[join] token pair ${tokenRow.pair_id} is stale; using initiator's current pair ${initiators[0].pair_id}`);
   }
 
   // Register follower and consume token atomically in a transaction.
   // The UPDATE uses AND NOT consumed to guard against TOCTOU races where two
   // concurrent requests both read consumed=false before either writes.
+  // The initiator's pair_id is re-read inside the transaction so a concurrent
+  // re-initiate cannot land the follower in the pair the initiator just left.
   const result = await sql.begin(async (tx) => {
     // @ts-expect-error — postgres TransactionSql inherits call signature from Sql but TS doesn't resolve it
     const consumed = await tx`
@@ -167,6 +168,13 @@ export async function join(req: Request): Promise<Response> {
       RETURNING token
     `;
     if (consumed.length === 0) return null;
+
+    // @ts-expect-error — same
+    const live = await tx`
+      SELECT pair_id FROM users WHERE public_key = ${tokenRow.initiator_key} FOR UPDATE
+    `;
+    if (live.length === 0) return null;
+    const pairId = live[0].pair_id as string;
 
     // @ts-expect-error — same
     await tx`

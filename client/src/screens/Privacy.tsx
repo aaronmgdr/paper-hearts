@@ -7,7 +7,7 @@ export default function Privacy() {
       <header class={styles.header}>
         <A href="/settings" class={styles.back}>← Back</A>
         <h1>Privacy Policy</h1>
-        <p class="meta">Last updated February 2026</p>
+        <p class="meta">Last updated September 2026</p>
       </header>
 
       <div class={styles.body}>
@@ -41,8 +41,8 @@ export default function Privacy() {
         <section>
           <h2>How long the relay holds an entry</h2>
           <p>
-            An encrypted entry stays on the relay for 30 days after it is written, then
-            it is deleted. It has to outlive the moment your partner first reads it, so
+            An encrypted entry stays on the relay for 30 days after it is last written or
+            edited, then it is deleted. It has to outlive the moment your partner first reads it, so
             that a second phone on the same account can still collect it — your partner's
             entries and your own. The relay holds ciphertext throughout and never holds
             the key.

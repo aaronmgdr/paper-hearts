@@ -141,7 +141,7 @@ export async function getEntries(req: Request, path: string): Promise<Response> 
     SELECT id, author_key, day_id, payload, fetched_at FROM entries
     WHERE pair_id = ${auth.pairId}
       AND day_id >= ${since}
-      AND created_at > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
+      AND GREATEST(created_at, updated_at) > now() - make_interval(days => ${ENTRY_RETENTION_DAYS})
       AND (${includeOwn} OR author_key != ${auth.publicKey})
       AND (${changedSince}::timestamptz IS NULL
            OR GREATEST(created_at, updated_at) > ${changedSince}::timestamptz)

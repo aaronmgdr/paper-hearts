@@ -29,6 +29,7 @@ vi.mock("./outbox", () => ({
   enqueue: async () => {},
   replaceForDayId: async () => false,
   peekAll: async () => [],
+  clearOutbox: async () => {},
 }));
 
 vi.mock("./sync", () => ({

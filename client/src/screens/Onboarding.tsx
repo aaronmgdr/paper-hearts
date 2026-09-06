@@ -9,6 +9,7 @@ import { createIdentity, createBiometricsOnlyIdentity, initiateHandshake, joinHa
 import { isPrfSupported } from "../lib/webauthn";
 import { registerPush } from "../lib/push";
 import { isIOS, isStandalonePWA } from "../lib/platform";
+import { parseDeviceLinkToken } from "../lib/devicelink";
 import BackButton from "../components/BackButton";
 import styles from "./Onboarding.module.css";
 import unlockStyles from "./Unlock.module.css";
@@ -70,7 +71,22 @@ export default function Onboarding() {
     }
   }
 
-  const pairingToken = () => qrData()?.split("token=")[1]
+  const pairingToken = () => {
+    try {
+      return new URL(qrData()).searchParams.get("token") || "";
+    } catch {
+      return "";
+    }
+  };
+
+  function pastedAsRelink(raw: string): boolean {
+    const trimmed = raw.trim();
+    try {
+      return new URL(trimmed).searchParams.get("relink") === "1";
+    } catch {
+      return /[?&]relink=1(?:&|$)/.test(trimmed);
+    }
+  }
 
   async function handleRelinkAuth() {
     setLoading(true);
@@ -150,7 +166,8 @@ export default function Onboarding() {
   }
 
   async function handleJoin() {
-    const token = tokenInput().trim();
+    const raw = tokenInput().trim();
+    const token = parseDeviceLinkToken(raw) ?? raw;
     if (!token) return;
     setLoading(true);
     setError("");
@@ -158,7 +175,11 @@ export default function Onboarding() {
     try {
       await joinHandshake(token);
       registerPush().catch(console.error);
-      if (relink) {
+      // The displayed fallback under the QR is just the token, but Share
+      // copies the full URL (which carries relink=1). Honour either so a
+      // paste still offers the history bundle — after re-link that bundle
+      // is the only way to get entries the server just dropped.
+      if (relink || pastedAsRelink(raw)) {
         setStep("receive-bundle");
       } else {
         setStep("linked");
