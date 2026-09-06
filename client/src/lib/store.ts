@@ -414,14 +414,16 @@ export function collectHistoryBundle(
             ...e,
             author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
           }));
-          const existing = (await storage.loadDay(dayId)) || { entries: [] };
-          for (const entry of flipped) {
-            const dupe = existing.entries.some(
-              (e) => e.author === entry.author && e.timestamp === entry.timestamp
-            );
-            if (!dupe) existing.entries.push(entry);
-          }
-          await storage.saveDay(dayId, existing);
+          await storage.updateDay(dayId, (day) => {
+            let added = false;
+            for (const entry of flipped) {
+              const dupe = day.entries.some(
+                (e) => e.author === entry.author && e.timestamp === entry.timestamp
+              );
+              if (!dupe) { day.entries.push(entry); added = true; }
+            }
+            return added;
+          });
         }
         console.log("[transfer] imported bundle over WS:", bundle.length, "days");
         onDone();
@@ -504,8 +506,6 @@ export async function checkConnectionHealth(): Promise<ConnectionHealth> {
 
 export async function submitEntry(text: string, dayId: string): Promise<void> {
   // Save locally — one entry per day, replace any existing "me" entry
-  const existing = (await storage.loadDay(dayId)) || { entries: [] };
-  const idx = existing.entries.findIndex((e) => e.author === "me");
   const timestamp = new Date().toISOString();
   const entry: storage.StoredEntry = {
     dayId,
@@ -513,12 +513,12 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
     payload: text,
     timestamp,
   };
-  if (idx >= 0) {
-    existing.entries[idx] = entry;
-  } else {
-    existing.entries.push(entry);
-  }
-  await storage.saveDay(dayId, existing);
+  await storage.updateDay(dayId, (day) => {
+    const idx = day.entries.findIndex((e) => e.author === "me");
+    if (idx >= 0) day.entries[idx] = entry;
+    else day.entries.push(entry);
+    return true;
+  });
 
   // Encrypt and queue for relay
   const ss = sharedSecret();
@@ -545,14 +545,19 @@ export async function submitEntry(text: string, dayId: string): Promise<void> {
 
 export async function updateEntry(text: string, dayId: string): Promise<void> {
   // Update local storage — preserve original timestamp, just replace content
-  const existing = (await storage.loadDay(dayId)) || { entries: [] };
-  const idx = existing.entries.findIndex((e) => e.author === "me");
-  if (idx >= 0) {
-    existing.entries[idx] = { ...existing.entries[idx], payload: text };
-  } else {
-    existing.entries.push({ dayId, author: "me", payload: text, timestamp: new Date().toISOString() });
-  }
-  await storage.saveDay(dayId, existing);
+  // The edit keeps the entry's original timestamp; the relay upsert is keyed on
+  // author and day, not time.
+  let entryTimestamp = "";
+  await storage.updateDay(dayId, (day) => {
+    const idx = day.entries.findIndex((e) => e.author === "me");
+    if (idx >= 0) {
+      day.entries[idx] = { ...day.entries[idx], payload: text };
+    } else {
+      day.entries.push({ dayId, author: "me", payload: text, timestamp: new Date().toISOString() });
+    }
+    entryTimestamp = day.entries.find((e) => e.author === "me")!.timestamp;
+    return true;
+  });
 
   // Re-encrypt and update relay — replace in outbox if still queued, otherwise enqueue fresh
   const ss = sharedSecret();
@@ -562,7 +567,7 @@ export async function updateEntry(text: string, dayId: string): Promise<void> {
   const plaintext = JSON.stringify({
     text,
     format: "markdown",
-    timestamp: existing.entries.find((e) => e.author === "me")!.timestamp,
+    timestamp: entryTimestamp,
   });
   const encrypted = crypto.encrypt(plaintext, ss);
   const payloadB64 = crypto.toBase64(encrypted);
@@ -660,6 +665,13 @@ export async function fetchAndDecryptEntries(
   let allHandled = true;
   const crypto = await loadCrypto();
 
+  // Days this device has written but not yet delivered. An edit keeps the
+  // entry's original timestamp — the relay upsert is keyed on author and day,
+  // not time — so a pending edit and the relay's copy of what it replaces
+  // compare equal, and merging would revert the edit on screen until the
+  // outbox drains. The outbox is the authority for these days.
+  const pendingDays = new Set((await peekAll()).map((item) => item.dayId));
+
   for (const entry of entries) {
     try {
       const encrypted = crypto.fromBase64(entry.payload);
@@ -668,14 +680,19 @@ export async function fetchAndDecryptEntries(
 
       const dayId = entry.dayId;
       const author: storage.StoredEntry["author"] = entry.author === "me" ? "me" : "partner";
-      const existing = (await storage.loadDay(dayId)) || { entries: [] };
-      const changed = mergeRelayedEntry(existing, {
-        dayId,
-        author,
-        payload: parsed.text,
-        timestamp: parsed.timestamp,
-      });
-      if (changed) await storage.saveDay(dayId, existing);
+
+      // Only our own rows are held back. A partner's edit reaches us the same
+      // way — equal timestamp, different text — and must still land.
+      if (author === "me" && pendingDays.has(dayId)) continue;
+
+      const changed = await storage.updateDay(dayId, (day) =>
+        mergeRelayedEntry(day, {
+          dayId,
+          author,
+          payload: parsed.text,
+          timestamp: parsed.timestamp,
+        })
+      );
 
       // Own rows are for the other handset; ack is how we tell the partner
       // path "this device has seen it". Acking our own writes is a no-op on
@@ -806,14 +823,16 @@ export async function downloadHistoryBundleNow(): Promise<boolean> {
       ...e,
       author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
     }));
-    const existing = (await storage.loadDay(dayId)) || { entries: [] };
-    for (const entry of flipped) {
-      const dupe = existing.entries.some(
-        (e) => e.author === entry.author && e.timestamp === entry.timestamp
-      );
-      if (!dupe) existing.entries.push(entry);
-    }
-    await storage.saveDay(dayId, existing);
+    await storage.updateDay(dayId, (day) => {
+      let added = false;
+      for (const entry of flipped) {
+        const dupe = day.entries.some(
+          (e) => e.author === entry.author && e.timestamp === entry.timestamp
+        );
+        if (!dupe) { day.entries.push(entry); added = true; }
+      }
+      return added;
+    });
   }
   console.log("[transfer] imported history bundle:", bundle.length, "days");
   return true;
@@ -843,15 +862,17 @@ export async function downloadHistoryBundle(): Promise<void> {
           ...e,
           author: (e.author === "me" ? "partner" : "me") as "me" | "partner",
         }));
-        const existing = (await storage.loadDay(dayId)) || { entries: [] };
         // Merge: add flipped entries not already present by author+timestamp
-        for (const entry of flipped) {
-          const dupe = existing.entries.some(
-            (e) => e.author === entry.author && e.timestamp === entry.timestamp
-          );
-          if (!dupe) existing.entries.push(entry);
-        }
-        await storage.saveDay(dayId, existing);
+        await storage.updateDay(dayId, (day) => {
+          let added = false;
+          for (const entry of flipped) {
+            const dupe = day.entries.some(
+              (e) => e.author === entry.author && e.timestamp === entry.timestamp
+            );
+            if (!dupe) { day.entries.push(entry); added = true; }
+          }
+          return added;
+        });
       }
       console.log("[transfer] imported history bundle:", bundle.length, "days");
       return;
@@ -987,17 +1008,23 @@ export async function installAccountBundle(
   });
 
   for (const { dayId, entries } of bundle.days ?? []) {
-    const existing = (await storage.loadDay(dayId)) || { entries: [] };
-    for (const entry of entries) {
-      const idx = existing.entries.findIndex((e) => e.author === entry.author);
-      if (idx >= 0) {
-        // Same author, same day: keep whichever was written last.
-        if (entry.timestamp >= existing.entries[idx].timestamp) existing.entries[idx] = entry;
-      } else {
-        existing.entries.push(entry);
+    await storage.updateDay(dayId, (day) => {
+      let changed = false;
+      for (const entry of entries) {
+        const idx = day.entries.findIndex((e) => e.author === entry.author);
+        if (idx >= 0) {
+          // Same author, same day: keep whichever was written last.
+          if (entry.timestamp >= day.entries[idx].timestamp) {
+            day.entries[idx] = entry;
+            changed = true;
+          }
+        } else {
+          day.entries.push(entry);
+          changed = true;
+        }
       }
-    }
-    await storage.saveDay(dayId, existing);
+      return changed;
+    });
   }
 
   setPublicKey(pk);

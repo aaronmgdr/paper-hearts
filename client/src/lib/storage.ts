@@ -1,3 +1,5 @@
+import { runExclusive } from "./serialize";
+
 // ── Backend detection ─────────────────────────────────────────
 // OPFS reads work everywhere. OPFS writes require createWritable, which
 // landed in Safari 17.4. Older Safari falls back to IDB for all reads + writes.
@@ -191,6 +193,26 @@ export async function loadDay(dayId: string): Promise<DayFile | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Read-modify-write one day's file, serialised against every other caller
+ * doing the same. Every writer of a day's entries goes through here — see
+ * runExclusive for what happens when they don't.
+ *
+ * `mutate` reports whether it changed anything; nothing is written when it
+ * says no, so a sync that confirms what the device already holds costs no I/O.
+ */
+export function updateDay(
+  dayId: string,
+  mutate: (day: DayFile) => boolean | Promise<boolean>
+): Promise<boolean> {
+  return runExclusive(`day:${dayId}`, async () => {
+    const day = (await loadDay(dayId)) || { entries: [] };
+    const changed = await mutate(day);
+    if (changed) await saveDay(dayId, day);
+    return changed;
+  });
 }
 
 /** List all dayIds with stored entries, sorted descending. */

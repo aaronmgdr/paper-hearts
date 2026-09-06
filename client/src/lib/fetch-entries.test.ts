@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import type { StoredIdentity, DayFile } from "./storage";
+import { runExclusive } from "./serialize";
 
 let identity: StoredIdentity | null = null;
 let days: Record<string, DayFile> = {};
@@ -14,6 +15,15 @@ vi.mock("./storage", () => ({
   loadIdentity: async () => (identity ? structuredClone(identity) : null),
   saveDay: async (dayId: string, day: DayFile) => { days[dayId] = structuredClone(day); },
   loadDay: async (dayId: string) => (days[dayId] ? structuredClone(days[dayId]) : null),
+  // The real serialisation primitive over the in-memory backend — every day
+  // write goes through it.
+  updateDay: (dayId: string, mutate: (day: DayFile) => boolean | Promise<boolean>) =>
+    runExclusive(`day:${dayId}`, async () => {
+      const day: DayFile = days[dayId] ? structuredClone(days[dayId]) : { entries: [] };
+      const changed = await mutate(day);
+      if (changed) days[dayId] = structuredClone(day);
+      return changed;
+    }),
   listDays: async () => Object.keys(days).sort().reverse(),
   saveSetting: async (key: string, value: string) => { settings[key] = value; },
   loadSetting: async (key: string) => settings[key] ?? null,
